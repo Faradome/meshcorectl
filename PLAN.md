@@ -5,6 +5,17 @@ dropping the interactive REPL and modeling command/argument structure on `kubect
 
 Working name for the new binary: **`meshcorectl`** (see [Decision 5](#decision-5-binary-name)).
 
+## Progress
+
+- **Phase 1 (scaffolding): done.** Contexts, the `connect.py` seam, the output
+  layer, `meshcorectl config ...`.
+- **Phase 2 (read path): done.** `get` (device/contacts/contact/channels/
+  channel/pending-contacts/path/time), `describe` (device/contact), `top
+  contact [--history]`, `logs [-f] [--since] [--rx]`, `scan`, `version`.
+  All command modules call through `mesh_data.py`'s pure Event-translation
+  helpers, which is why 100% coverage held through this phase too (see §8).
+- **Phase 3 (write path) and beyond: not started.**
+
 ## 0. Scope & assumptions
 
 - **Reuse, don't reimplement, the wire protocol.** The `meshcore` PyPI package

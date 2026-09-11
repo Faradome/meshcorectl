@@ -12,17 +12,25 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
-from collections.abc import Coroutine
+from collections.abc import AsyncIterator, Callable, Coroutine
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, TypeVar
 
 import click
 
-from . import __version__
+from . import __version__, resource_specs  # noqa: F401 - import registers resource specs
 from .commands.config_cmd import config_group
-from .connect import MeshCoreConnection, connect
+from .commands.describe import describe_group
+from .commands.get import get_group
+from .commands.logs import logs_command
+from .commands.scan import scan_command
+from .commands.top import top_group
+from .commands.version import version_command
+from .connect import ConnectError, MeshCoreConnection, connect
 from .context_store import Context, ContextStore
+from .mesh_data import MeshDataError
 from .output import OutputFormat
 
 DEFAULT_TIMEOUT = 10.0
@@ -85,6 +93,38 @@ class CliState:
     def run_async(self, coro: Coroutine[Any, Any, _T]) -> _T:
         """Convenience for commands: `state.run_async(state.connect())`."""
         return asyncio.run(coro)
+
+    @asynccontextmanager
+    async def connected(self) -> AsyncIterator[MeshCoreConnection]:
+        """`async with state.connected() as conn:` -- connect, yield, always
+        disconnect, even if the command body raises."""
+        connection = await self.connect()
+        try:
+            yield connection
+        finally:
+            await connection.disconnect()
+
+    def run_command(self, coro: Coroutine[Any, Any, _T]) -> _T:
+        """Run `coro` (typically built around `async with state.connected()`),
+        translating connection/device failures into the one
+        `click.ClickException` every command surfaces -- never a raw
+        traceback from `connect.ConnectError`/`mesh_data.MeshDataError`."""
+        try:
+            return self.run_async(coro)
+        except (ConnectError, MeshDataError) as exc:
+            raise click.ClickException(str(exc)) from exc
+
+    def call(self, fn: Callable[[MeshCoreConnection], Coroutine[Any, Any, _T]]) -> _T:
+        """The one-liner most read/write commands use: connect, call
+        `fn(connection)`, disconnect, translate errors -- e.g.
+        `state.call(fetch_contacts)`, or `state.call(lambda conn:
+        fetch_telemetry(conn, contact))` for a call needing extra args."""
+
+        async def run() -> _T:
+            async with self.connected() as connection:
+                return await fn(connection)
+
+        return self.run_command(run())
 
 
 def _configure_logging(verbosity: int) -> None:
@@ -158,6 +198,12 @@ def cli(
 
 
 cli.add_command(config_group)
+cli.add_command(get_group)
+cli.add_command(describe_group)
+cli.add_command(top_group)
+cli.add_command(logs_command)
+cli.add_command(scan_command)
+cli.add_command(version_command)
 
 
 def main() -> None:
