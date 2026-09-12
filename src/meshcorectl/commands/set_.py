@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import textwrap
 from typing import Any
 
@@ -48,9 +49,25 @@ def set_device_command(
     click.echo(render_result({"param": param, "value": value}, fmt, text))
 
 
+def _format_params_help(raw_help: str, params: tuple[str, ...]) -> str:
+    """Fill `raw_help`'s `{params}` placeholder with `params`, wrapped to a
+    readable width.
+
+    `raw_help` is dedented (`inspect.cleandoc`) *before* substituting, not
+    after: Python only auto-dedents docstrings at compile time starting in
+    3.13, so on 3.10-3.12 a bare `f.__doc__` still carries its original
+    source indentation. Substituting a multi-line, zero-indent wrapped
+    value into that indented text and dedenting afterward (which is what
+    Click's own `--help` rendering does to `.help`) breaks: the newly
+    inserted line has no indentation of its own, which drags the computed
+    common indent down to zero and defeats the dedent for every other line.
+    Dedenting first avoids the whole problem, on every Python version.
+    """
+    wrapped = textwrap.fill(", ".join(params), width=76)
+    return inspect.cleandoc(raw_help).format(params=wrapped)
+
+
 # Click captures `help` from the docstring at decoration time, so `{params}`
 # is filled in on the Command's `.help` afterward, not the original
-# function's `__doc__`. textwrap keeps the `\b`-protected parameter list
-# readable instead of one long line.
-_params_wrapped = textwrap.fill(", ".join(DEVICE_PARAMS), width=76)
-set_device_command.help = (set_device_command.help or "").format(params=_params_wrapped)
+# function's `__doc__`.
+set_device_command.help = _format_params_help(set_device_command.help or "", DEVICE_PARAMS)

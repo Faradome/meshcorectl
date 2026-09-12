@@ -40,8 +40,13 @@ def test_logs_no_messages_prints_nothing(runner, configured_store, fake_connecti
 
 async def test_wait_until_interrupted_really_blocks():
     """Exercises the real (un-monkeypatched) function: proves it never
-    resolves on its own, without hanging the test suite forever."""
-    with pytest.raises(TimeoutError):
+    resolves on its own, without hanging the test suite forever.
+
+    `asyncio.TimeoutError` (not the builtin `TimeoutError`) is what
+    `asyncio.wait_for` actually raises on Python 3.10; the two only became
+    the same class starting in 3.11.
+    """
+    with pytest.raises(asyncio.TimeoutError):
         await asyncio.wait_for(wait_until_interrupted(), timeout=0.01)
 
 
