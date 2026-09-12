@@ -62,13 +62,16 @@ def normalize_contact(raw: dict[str, Any]) -> dict[str, Any]:
     """`public_key` is kept (not just a display field): the `meshcore`
     library accepts any dict with a `public_key` as a send destination, so
     this same normalized dict can be passed straight back into
-    `commands.req_telemetry_sync()` etc. -- no separate "raw contact" shape
-    needed."""
+    `commands.req_telemetry_sync()`, `commands.send_msg()`, etc. -- no
+    separate "raw contact" shape needed. `hops` is `path` (the human
+    string) restated as the raw signed int (-1 flood, 0 direct, N hops),
+    for `selectors.py`'s `h`/`d`/`f` clauses."""
     return {
         "name": raw.get("adv_name", ""),
         "type": contact_type_name(raw.get("type", 0)),
         "public_key": raw.get("public_key", ""),
         "path": format_path(raw),
+        "hops": raw.get("out_path_len", -1),
         "last_advert": raw.get("last_advert"),
         "lastmod": raw.get("lastmod"),
         "flags": raw.get("flags", 0),
@@ -105,6 +108,16 @@ def normalize_channel(raw: dict[str, Any]) -> dict[str, Any]:
         "name": raw.get("channel_name", ""),
         "secret": secret.hex() if isinstance(secret, (bytes, bytearray)) else secret,
     }
+
+
+def find_channel(channels: list[dict[str, Any]], index_or_name: str) -> dict[str, Any] | None:
+    """Numeric argument -> match by index; otherwise a case-insensitive
+    name match, same precedence `get`/`send`/`delete` all want."""
+    if index_or_name.isdigit():
+        index = int(index_or_name)
+        return next((c for c in channels if c["index"] == index), None)
+    needle = index_or_name.lower()
+    return next((c for c in channels if c["name"].lower() == needle), None)
 
 
 async def fetch_channels(connection: MeshCoreConnection) -> list[dict[str, Any]]:
@@ -206,6 +219,183 @@ async def drain_messages(connection: MeshCoreConnection) -> list[dict[str, Any]]
             break
         messages.append(event.payload)
     return messages
+
+
+async def import_contact(connection: MeshCoreConnection, uri: str) -> None:
+    """`uri` must be a `meshcore://<hex>` card, same format `get device
+    card`-style export produces (create/export-contact is out of Phase 3's
+    scope; only import is)."""
+    prefix = "meshcore://"
+    if not uri.startswith(prefix):
+        raise MeshDataError(f"not a meshcore contact URI (expected {prefix}...): {uri!r}")
+    try:
+        payload = bytes.fromhex(uri[len(prefix) :])
+    except ValueError as exc:
+        raise MeshDataError(f"invalid hex in contact URI: {exc}") from exc
+    _check(await connection.commands.import_contact(payload), "importing contact")
+
+
+async def remove_contact(connection: MeshCoreConnection, contact: dict[str, Any]) -> None:
+    _check(await connection.commands.remove_contact(contact), "removing contact")
+
+
+async def create_channel(
+    connection: MeshCoreConnection, index: int, name: str, secret_hex: str | None
+) -> dict[str, Any]:
+    """`secret_hex`, if given, must be 32 hex chars (16 bytes); when omitted
+    the device derives the secret from `name` itself (only if `name`
+    starts with '#') -- both handled by `commands.set_channel` already, not
+    reimplemented here."""
+    secret = None
+    if secret_hex is not None:
+        if len(secret_hex) != 32:
+            raise MeshDataError("channel secret must be exactly 32 hex characters (16 bytes)")
+        try:
+            secret = bytes.fromhex(secret_hex)
+        except ValueError as exc:
+            raise MeshDataError(f"invalid hex in channel secret: {exc}") from exc
+    _check(await connection.commands.set_channel(index, name, secret), "setting channel")
+    confirmed = _check(await connection.commands.get_channel(index), "reading back the channel")
+    return normalize_channel(confirmed.payload)
+
+
+async def delete_channel(connection: MeshCoreConnection, index: int) -> None:
+    """There's no dedicated "delete channel" wire command: clearing the
+    name and zeroing the secret (what the original tool's `remove_channel`
+    did) is the convention."""
+    _check(await connection.commands.set_channel(index, "", bytes(16)), "clearing channel")
+
+
+async def send_message(
+    connection: MeshCoreConnection, contact: dict[str, Any], text: str, *, wait_ack: bool
+) -> dict[str, Any]:
+    if not wait_ack:
+        _check(await connection.commands.send_msg(contact, text), "sending message")
+        return {"sent": True}
+
+    result = await connection.commands.send_msg_with_retry(contact, text)
+    if result is None:
+        raise MeshDataError(f"no ack received from {contact['name']}")
+    _check(result, "sending message")
+    return {"sent": True, "acked": True}
+
+
+async def send_channel_message(
+    connection: MeshCoreConnection, channel: dict[str, Any], text: str
+) -> dict[str, Any]:
+    result = await connection.commands.send_chan_msg(channel["index"], text)
+    _check(result, "sending channel message")
+    return {"sent": True}
+
+
+async def run_repeater_command(
+    connection: MeshCoreConnection, contact: dict[str, Any], command: str, *, timeout: float
+) -> str | None:
+    """Send a raw console command to a repeater/room and wait for its reply.
+
+    Combines the original tool's `cmd` (send) and `wmt8` (wait-for-reply)
+    into one round-trip -- closer to `kubectl exec`'s synchronous
+    "run this, show me the output" shape. Returns the reply text, or None
+    if nothing came back within `timeout`.
+    """
+    _check(await connection.commands.send_cmd(contact, command), "sending repeater command")
+    notified = await connection.wait_for_event(EventType.MESSAGES_WAITING, timeout=timeout)
+    if notified is None:
+        return None
+    reply = _check(await connection.commands.get_msg(), "reading the repeater's reply")
+    return reply.payload.get("text")
+
+
+async def login(
+    connection: MeshCoreConnection, contact: dict[str, Any], password: str, *, timeout: float
+) -> bool:
+    result = await connection.commands.send_login_sync(contact, password, timeout=timeout)
+    if result is None:
+        raise MeshDataError(f"login to {contact['name']} timed out")
+    return bool(result.type == EventType.LOGIN_SUCCESS)
+
+
+async def logout(connection: MeshCoreConnection, contact: dict[str, Any]) -> None:
+    _check(await connection.commands.send_logout(contact), "logging out")
+
+
+async def send_advert(connection: MeshCoreConnection, *, flood: bool) -> None:
+    _check(await connection.commands.send_advert(flood=flood), "sending advert")
+
+
+async def reboot_device(connection: MeshCoreConnection) -> None:
+    """No response is expected -- the device reboots immediately, and the
+    original tool doesn't check this call's result either."""
+    await connection.commands.reboot()
+
+
+async def run_trace(
+    connection: MeshCoreConnection, path_spec: str, *, timeout: float | None = None
+) -> list[dict[str, Any]]:
+    """`path_spec` is a comma-separated hex list of repeater pubkey
+    prefixes (e.g. "23,5f,3a") -- `commands.send_trace` parses that string
+    itself, so it's forwarded as-is rather than re-parsed here."""
+    sent = _check(await connection.commands.send_trace(path=path_spec), "sending trace")
+    tag = int.from_bytes(sent.payload["expected_ack"], byteorder="little")
+    if timeout is None:
+        timeout = sent.payload["suggested_timeout"] / 1000 * 1.2
+    event = await connection.wait_for_event(
+        EventType.TRACE_DATA, attribute_filters={"tag": tag}, timeout=timeout
+    )
+    if event is None:
+        raise MeshDataError(f"timed out waiting for a trace reply on path {path_spec!r}")
+    _check(event, "waiting for trace")
+    return list(event.payload["path"])
+
+
+def _parse_bool(value: str) -> bool:
+    normalized = value.strip().lower()
+    if normalized in ("on", "true", "1", "yes"):
+        return True
+    if normalized in ("off", "false", "0", "no"):
+        return False
+    raise ValueError(f"expected on/off, got {value!r}")
+
+
+def _parse_coords(value: str) -> tuple[float, float]:
+    parts = value.split(",")
+    if len(parts) != 2:
+        raise ValueError("expected 'LAT,LON'")
+    return float(parts[0]), float(parts[1])
+
+
+_DEVICE_PARAM_SETTERS: dict[str, Callable[[MeshCoreConnection, str], Any]] = {
+    "name": lambda conn, value: conn.commands.set_name(value),
+    "tx-power": lambda conn, value: conn.commands.set_tx_power(int(value)),
+    "coords": lambda conn, value: conn.commands.set_coords(*_parse_coords(value)),
+    "telemetry-mode-base": lambda conn, value: conn.commands.set_telemetry_mode_base(int(value)),
+    "telemetry-mode-loc": lambda conn, value: conn.commands.set_telemetry_mode_loc(int(value)),
+    "telemetry-mode-env": lambda conn, value: conn.commands.set_telemetry_mode_env(int(value)),
+    "manual-add-contacts": (
+        lambda conn, value: conn.commands.set_manual_add_contacts(_parse_bool(value))
+    ),
+    "multi-acks": lambda conn, value: conn.commands.set_multi_acks(int(value)),
+    "advert-loc-policy": lambda conn, value: conn.commands.set_advert_loc_policy(int(value)),
+    "pin": lambda conn, value: conn.commands.set_devicepin(int(value)),
+}
+
+DEVICE_PARAMS = tuple(sorted(_DEVICE_PARAM_SETTERS))
+
+
+async def set_device_param(connection: MeshCoreConnection, param: str, value: str) -> None:
+    """A deliberately curated subset of the original tool's ~30-parameter
+    `set` command (PLAN.md §4 flags this as an initial useful set, not a
+    full port) -- see `DEVICE_PARAMS` for exactly which ones."""
+    setter = _DEVICE_PARAM_SETTERS.get(param)
+    if setter is None:
+        raise MeshDataError(
+            f"unknown device parameter {param!r} (expected one of: {', '.join(DEVICE_PARAMS)})"
+        )
+    try:
+        result = await setter(connection, value)
+    except ValueError as exc:
+        raise MeshDataError(f"invalid value {value!r} for {param}: {exc}") from exc
+    _check(result, f"setting {param}")
 
 
 async def collect_events(

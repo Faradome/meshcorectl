@@ -82,3 +82,8 @@ register(
     "scan-result",
     ResourceSpec(columns=(("KIND", "kind"), ("ADDRESS", "address"), ("NAME", "name"))),
 )
+
+register(
+    "trace-hop",
+    ResourceSpec(columns=(("SNR", "snr"), ("HASH", "hash"))),
+)

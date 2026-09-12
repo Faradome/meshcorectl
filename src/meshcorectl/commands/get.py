@@ -16,6 +16,7 @@ from ..mesh_data import (
     fetch_contacts,
     fetch_device,
     fetch_time,
+    find_channel,
     find_contact,
     normalize_contact,
 )
@@ -79,14 +80,6 @@ def get_channel(state: Any, index_or_name: str) -> None:
     if channel is None:
         raise click.ClickException(f"no channel matching {index_or_name!r}")
     click.echo(render(channel, state.output, kind="channel"))
-
-
-def find_channel(channels: list[dict[str, Any]], index_or_name: str) -> dict[str, Any] | None:
-    if index_or_name.isdigit():
-        index = int(index_or_name)
-        return next((c for c in channels if c["index"] == index), None)
-    needle = index_or_name.lower()
-    return next((c for c in channels if c["name"].lower() == needle), None)
 
 
 @get_group.command("pending-contacts")

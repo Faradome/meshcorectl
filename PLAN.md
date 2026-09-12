@@ -14,7 +14,15 @@ Working name for the new binary: **`meshcorectl`** (see [Decision 5](#decision-5
   contact [--history]`, `logs [-f] [--since] [--rx]`, `scan`, `version`.
   All command modules call through `mesh_data.py`'s pure Event-translation
   helpers, which is why 100% coverage held through this phase too (see §8).
-- **Phase 3 (write path) and beyond: not started.**
+- **Phase 3 (write path): done.** `create` (contact --uri, channel), `delete`
+  (contact by name or `-l` selector, channel), `send` (message, channel),
+  `exec` (repeater console command + reply), `login`/`logout`, `top`'s
+  telemetry, `trace`, `advert`, `reboot`, `set device`, and `selectors.py`
+  (the `-l` grammar) wired into `get`/`delete`/`send`/`exec`/`login`. One
+  deliberate deviation from this doc's original command-tree sketch: no
+  `delete pending-contacts` — see the note under §3.
+  `--dry-run` on every mutating command, per §2's idiom table.
+- **Phase 4 (polish) and beyond: not started.**
 
 ## 0. Scope & assumptions
 
@@ -80,13 +88,12 @@ meshcorectl
 ├── describe      device | contact NAME
 ├── create        contact --uri URI   (import)
 │                 channel N NAME [KEY]
-├── delete        contact NAME [-l selector]
+├── delete        contact NAME | -l selector
 │                 channel N
-│                 pending-contacts               (flush)
-├── send          message CONTACT TEXT [--wait-ack]
+├── send          message [CONTACT | -l selector] TEXT [--wait-ack]
 │                 channel N TEXT
-├── exec          REPEATER -- CLI_CMD            (raw repeater console cmd)
-├── login         REPEATER [--password]
+├── exec          [REPEATER | -l selector] -- CLI_CMD  (raw repeater console cmd)
+├── login         [REPEATER | -l selector] [--password | --password-stdin]
 ├── logout        REPEATER
 ├── top           contact NAME [--history]        (telemetry / mma)
 ├── logs          [-f] [--since DURATION] [--rx]   (message stream)
@@ -104,6 +111,17 @@ meshcorectl
 Every noun gets singular + plural + short form where kubectl would (`contact`/`contacts`/`ct`,
 `channel`/`channels`/`ch`). Every command gets real `--help` text and a man-page-quality
 description generated from the same source (see [§7](#7-documentation)).
+
+**Deviation found during Phase 3:** there is no `delete pending-contacts` (the original tool's
+`flush_pending`), even though it was in this doc's first sketch of the tree above. "Pending"
+contacts are purely client-side bookkeeping the original tool accumulated over a long-lived
+session (adverts seen but not yet added, tracked in its own process memory) — the device itself
+has no concept of them. A one-shot connection (Decision 1) never accumulates anything *across*
+invocations, so `get pending-contacts` already had to become "watch for one timeout window"
+instead of "read a cache" (§3's tree, `get`'s row) — and a `delete`/flush of that same
+never-persisted state genuinely has nothing to do. Implementing it as a command anyway would
+be a no-op with a straight face; better to not ship it than ship a command whose only job is to
+print "there was never anything to flush."
 
 ## 4. Design decisions (locked)
 

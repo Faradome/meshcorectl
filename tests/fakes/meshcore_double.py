@@ -86,9 +86,30 @@ class FakeMeshCore:
     commands: FakeCommandHandler = field(default_factory=FakeCommandHandler)
     subscriptions: list[tuple[EventType, Callable[..., Any]]] = field(default_factory=list)
     disconnected: bool = False
+    wait_for_event_calls: list[tuple[Any, Any, Any]] = field(default_factory=list, repr=False)
+    _wait_for_event_results: list[Any] = field(default_factory=list, repr=False)
 
     def subscribe(self, event_type: EventType, handler: Callable[..., Any]) -> None:
         self.subscriptions.append((event_type, handler))
 
     async def disconnect(self) -> None:
         self.disconnected = True
+
+    def script_wait_for_event(self, *results: Any) -> None:
+        """Queue one or more results (an Event, None for "timed out", or an
+        Exception to raise) for successive `wait_for_event` calls."""
+        self._wait_for_event_results.extend(results)
+
+    async def wait_for_event(
+        self, event_type: Any, attribute_filters: Any = None, timeout: Any = None
+    ) -> Any:
+        self.wait_for_event_calls.append((event_type, attribute_filters, timeout))
+        if not self._wait_for_event_results:
+            raise AssertionError(
+                "FakeMeshCore.wait_for_event() called with no scripted result; "
+                "call fake.script_wait_for_event(...) in the test first"
+            )
+        result = self._wait_for_event_results.pop(0)
+        if isinstance(result, Exception):
+            raise result
+        return result

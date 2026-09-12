@@ -63,3 +63,16 @@ def render(
     spec = resources.get(kind)
     columns = spec.columns + spec.wide_columns if fmt is OutputFormat.WIDE else spec.columns
     return format_table(rows, columns)
+
+
+def render_result(result: Mapping[str, Any], fmt: OutputFormat, text: str) -> str:
+    """For mutating commands with no natural "resource list" shape
+    (send/login/advert/...): `-o json`/`-o yaml` render `result`; anything
+    else (table/wide/name, the default) is `text` -- a plain confirmation
+    line, the same convention `kubectl create`'s "pod/foo created" follows.
+    """
+    if fmt is OutputFormat.JSON:
+        return json.dumps(result, indent=2, default=str)
+    if fmt is OutputFormat.YAML:
+        return yaml.safe_dump(result, sort_keys=False).rstrip("\n")
+    return text

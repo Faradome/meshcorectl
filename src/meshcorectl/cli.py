@@ -21,12 +21,21 @@ from typing import Any, TypeVar
 import click
 
 from . import __version__, resource_specs  # noqa: F401 - import registers resource specs
+from .commands.advert import advert_command
 from .commands.config_cmd import config_group
+from .commands.create import create_group
+from .commands.delete import delete_group
 from .commands.describe import describe_group
+from .commands.exec_ import exec_command
 from .commands.get import get_group
+from .commands.login import login_command, logout_command
 from .commands.logs import logs_command
+from .commands.reboot import reboot_command
 from .commands.scan import scan_command
+from .commands.send import send_group
+from .commands.set_ import set_group
 from .commands.top import top_group
+from .commands.trace import trace_command
 from .commands.version import version_command
 from .connect import ConnectError, MeshCoreConnection, connect
 from .context_store import Context, ContextStore
@@ -200,8 +209,18 @@ def cli(
 cli.add_command(config_group)
 cli.add_command(get_group)
 cli.add_command(describe_group)
+cli.add_command(create_group)
+cli.add_command(delete_group)
+cli.add_command(send_group)
+cli.add_command(exec_command)
+cli.add_command(login_command)
+cli.add_command(logout_command)
 cli.add_command(top_group)
 cli.add_command(logs_command)
+cli.add_command(trace_command)
+cli.add_command(advert_command)
+cli.add_command(reboot_command)
+cli.add_command(set_group)
 cli.add_command(scan_command)
 cli.add_command(version_command)
 

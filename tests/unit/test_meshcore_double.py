@@ -86,3 +86,40 @@ async def test_fake_mesh_core_disconnect_sets_flag():
 def test_fake_mesh_core_satisfies_the_connection_protocol():
     fake = FakeMeshCore()
     assert isinstance(fake, MeshCoreConnection)
+
+
+async def test_wait_for_event_unscripted_raises():
+    fake = FakeMeshCore()
+    with pytest.raises(AssertionError, match="no scripted result"):
+        await fake.wait_for_event(EventType.ACK)
+
+
+async def test_wait_for_event_returns_scripted_value():
+    fake = FakeMeshCore()
+    event = Event(EventType.ACK, {"code": "abcd"})
+    fake.script_wait_for_event(event)
+    result = await fake.wait_for_event(EventType.ACK, timeout=5)
+    assert result is event
+    assert fake.wait_for_event_calls == [(EventType.ACK, None, 5)]
+
+
+async def test_wait_for_event_can_script_a_timeout_as_none():
+    fake = FakeMeshCore()
+    fake.script_wait_for_event(None)
+    assert await fake.wait_for_event(EventType.ACK) is None
+
+
+async def test_wait_for_event_can_script_an_exception():
+    fake = FakeMeshCore()
+    fake.script_wait_for_event(TimeoutError("nope"))
+    with pytest.raises(TimeoutError, match="nope"):
+        await fake.wait_for_event(EventType.ACK)
+
+
+async def test_wait_for_event_consumes_sequence_in_order():
+    fake = FakeMeshCore()
+    first = Event(EventType.ACK, {"code": "1"})
+    second = Event(EventType.ACK, {"code": "2"})
+    fake.script_wait_for_event(first, second)
+    assert await fake.wait_for_event(EventType.ACK) is first
+    assert await fake.wait_for_event(EventType.ACK) is second

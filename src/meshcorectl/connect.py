@@ -34,6 +34,13 @@ class MeshCoreConnection(Protocol):
 
     async def disconnect(self) -> None: ...  # pragma: no cover
 
+    async def wait_for_event(
+        self,
+        event_type: Any,
+        attribute_filters: dict[str, Any] | None = None,
+        timeout: float | None = None,
+    ) -> Any: ...  # pragma: no cover
+
 
 async def connect(
     spec: ConnectionSpec, *, timeout: float, debug: bool = False
