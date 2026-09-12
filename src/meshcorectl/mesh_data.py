@@ -19,6 +19,7 @@ from typing import Any
 from meshcore import EventType
 
 from .connect import MeshCoreConnection
+from .logging_utils import redact_secrets
 
 CONTACT_TYPE_NAMES = {0: "none", 1: "client", 2: "repeater", 3: "room", 4: "sensor"}
 
@@ -299,11 +300,14 @@ async def delete_channel(connection: MeshCoreConnection, index: int) -> None:
 async def send_message(
     connection: MeshCoreConnection, contact: dict[str, Any], text: str, *, wait_ack: bool
 ) -> dict[str, Any]:
-    if not wait_ack:
-        _check(await connection.commands.send_msg(contact, text), "sending message")
-        return {"sent": True}
+    # The `meshcore` library debug-logs the message text itself -- keep it
+    # out of `-vv` output. See logging_utils.py.
+    with redact_secrets():
+        if not wait_ack:
+            _check(await connection.commands.send_msg(contact, text), "sending message")
+            return {"sent": True}
 
-    result = await connection.commands.send_msg_with_retry(contact, text)
+        result = await connection.commands.send_msg_with_retry(contact, text)
     if result is None:
         raise MeshDataError(f"no ack received from {contact['name']}")
     _check(result, "sending message")
@@ -313,7 +317,9 @@ async def send_message(
 async def send_channel_message(
     connection: MeshCoreConnection, channel: dict[str, Any], text: str
 ) -> dict[str, Any]:
-    result = await connection.commands.send_chan_msg(channel["index"], text)
+    # Same as send_message() above: the channel text is debug-logged too.
+    with redact_secrets():
+        result = await connection.commands.send_chan_msg(channel["index"], text)
     _check(result, "sending channel message")
     return {"sent": True}
 
@@ -337,7 +343,11 @@ async def run_repeater_command(
 async def login(
     connection: MeshCoreConnection, contact: dict[str, Any], password: str, *, timeout: float
 ) -> bool:
-    result = await connection.commands.send_login_sync(contact, password, timeout=timeout)
+    # `send_login_sync` hands the password straight to a debug log in the
+    # `meshcore` library (both as the raw request and as a hex-dumped
+    # frame) -- keep it out of `-vv` output. See logging_utils.py.
+    with redact_secrets():
+        result = await connection.commands.send_login_sync(contact, password, timeout=timeout)
     if result is None:
         raise MeshDataError(f"login to {contact['name']} timed out")
     return bool(result.type == EventType.LOGIN_SUCCESS)
@@ -391,6 +401,13 @@ def _parse_coords(value: str) -> tuple[float, float]:
     return float(parts[0]), float(parts[1])
 
 
+async def _set_device_pin(connection: MeshCoreConnection, value: str) -> Any:
+    # The `meshcore` library debug-logs the PIN itself ("Setting device
+    # PIN to: ...") -- keep it out of `-vv` output. See logging_utils.py.
+    with redact_secrets():
+        return await connection.commands.set_devicepin(int(value))
+
+
 _DEVICE_PARAM_SETTERS: dict[str, Callable[[MeshCoreConnection, str], Any]] = {
     "name": lambda conn, value: conn.commands.set_name(value),
     "tx-power": lambda conn, value: conn.commands.set_tx_power(int(value)),
@@ -403,7 +420,7 @@ _DEVICE_PARAM_SETTERS: dict[str, Callable[[MeshCoreConnection, str], Any]] = {
     ),
     "multi-acks": lambda conn, value: conn.commands.set_multi_acks(int(value)),
     "advert-loc-policy": lambda conn, value: conn.commands.set_advert_loc_policy(int(value)),
-    "pin": lambda conn, value: conn.commands.set_devicepin(int(value)),
+    "pin": _set_device_pin,
 }
 
 DEVICE_PARAMS = tuple(sorted(_DEVICE_PARAM_SETTERS))

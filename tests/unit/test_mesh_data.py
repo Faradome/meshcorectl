@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 import pytest
 from meshcore import EventType
 from meshcore.events import Event
@@ -606,6 +608,45 @@ async def test_send_channel_message_raises_on_error():
         await send_channel_message(fake, {"index": 0, "name": "public"}, "hi")
 
 
+async def test_send_message_redacts_meshcore_logger_during_the_send(meshcore_logger_at_debug):
+    # M1 fix: the `meshcore` library debug-logs message text -- confirm
+    # `-vv` (a DEBUG-level "meshcore" logger) doesn't see it.
+    fake = FakeMeshCore()
+    observed_levels: list[int] = []
+
+    async def spy_send_msg(contact, text):
+        observed_levels.append(meshcore_logger_at_debug.level)
+        return Event(EventType.MSG_SENT, {})
+
+    fake.commands.send_msg = spy_send_msg
+    contact = normalize_contact({"adv_name": "alice", "public_key": "AA"})
+
+    result = await send_message(fake, contact, "hi", wait_ack=False)
+
+    assert result == {"sent": True}
+    assert observed_levels == [logging.INFO]
+    assert meshcore_logger_at_debug.level == logging.DEBUG  # restored after the call
+
+
+async def test_send_channel_message_redacts_meshcore_logger_during_the_send(
+    meshcore_logger_at_debug,
+):
+    fake = FakeMeshCore()
+    observed_levels: list[int] = []
+
+    async def spy_send_chan_msg(index, text):
+        observed_levels.append(meshcore_logger_at_debug.level)
+        return Event(EventType.MSG_SENT, {})
+
+    fake.commands.send_chan_msg = spy_send_chan_msg
+
+    result = await send_channel_message(fake, {"index": 0, "name": "public"}, "hi")
+
+    assert result == {"sent": True}
+    assert observed_levels == [logging.INFO]
+    assert meshcore_logger_at_debug.level == logging.DEBUG
+
+
 # --- run_repeater_command (exec) -------------------------------------------------
 
 
@@ -659,6 +700,25 @@ async def test_login_timeout_raises():
     contact = normalize_contact({"adv_name": "rep1", "public_key": "AA"})
     with pytest.raises(MeshDataError, match="timed out"):
         await login(fake, contact, "secret", timeout=5)
+
+
+async def test_login_redacts_meshcore_logger_during_the_send(meshcore_logger_at_debug):
+    # M1 fix: the `meshcore` library debug-logs the password itself (both
+    # the login request and the raw outbound frame) -- confirm `-vv` (a
+    # DEBUG-level "meshcore" logger) doesn't see it.
+    fake = FakeMeshCore()
+    observed_levels: list[int] = []
+
+    async def spy_send_login_sync(contact, password, timeout):
+        observed_levels.append(meshcore_logger_at_debug.level)
+        return Event(EventType.LOGIN_SUCCESS, {})
+
+    fake.commands.send_login_sync = spy_send_login_sync
+    contact = normalize_contact({"adv_name": "rep1", "public_key": "AA"})
+
+    assert await login(fake, contact, "hunter2", timeout=5) is True
+    assert observed_levels == [logging.INFO]
+    assert meshcore_logger_at_debug.level == logging.DEBUG  # restored after the call
 
 
 async def test_logout_calls_through():
@@ -815,6 +875,33 @@ async def test_set_device_param_raises_on_device_error():
     fake.commands.script("set_tx_power", Event(EventType.ERROR, {"reason": "out of range"}))
     with pytest.raises(MeshDataError, match="out of range"):
         await set_device_param(fake, "tx-power", "99")
+
+
+async def test_set_device_param_pin_parses_int():
+    fake = FakeMeshCore()
+    fake.commands.script("set_devicepin", Event(EventType.OK, {}))
+    await set_device_param(fake, "pin", "1234")
+    assert fake.commands.calls == [("set_devicepin", (1234,), {})]
+
+
+async def test_set_device_param_pin_redacts_meshcore_logger_during_the_send(
+    meshcore_logger_at_debug,
+):
+    # M1 fix: the `meshcore` library debug-logs "Setting device PIN to:
+    # <pin>" -- confirm `-vv` (a DEBUG-level "meshcore" logger) doesn't see it.
+    fake = FakeMeshCore()
+    observed_levels: list[int] = []
+
+    async def spy_set_devicepin(pin):
+        observed_levels.append(meshcore_logger_at_debug.level)
+        return Event(EventType.OK, {})
+
+    fake.commands.set_devicepin = spy_set_devicepin
+
+    await set_device_param(fake, "pin", "1234")
+
+    assert observed_levels == [logging.INFO]
+    assert meshcore_logger_at_debug.level == logging.DEBUG
 
 
 def test_device_params_lists_every_known_setter():

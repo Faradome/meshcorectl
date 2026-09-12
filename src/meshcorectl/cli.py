@@ -176,7 +176,11 @@ def _configure_logging(verbosity: int) -> None:
     "--verbose",
     "verbosity",
     count=True,
-    help="Increase logging verbosity (-v for info, -vv for debug).",
+    help=(
+        "Increase logging verbosity (-v for info, -vv for debug). Login "
+        "passwords, device PINs, and message text are kept out of the "
+        "debug log."
+    ),
 )
 @click.option(
     "--config",
