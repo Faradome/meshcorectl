@@ -109,6 +109,16 @@ def test_get_contacts_bad_selector_errors(runner, configured_store, fake_connect
     assert result.exit_code != 0
 
 
+def test_get_contacts_empty_selector_errors_instead_of_matching_all(
+    runner, configured_store, fake_connection
+):
+    """`-l ""` (e.g. an unset `-l "$VAR"`) must not be silently treated the
+    same as "-l wasn't passed at all"."""
+    script_contacts(fake_connection)
+    result = invoke(runner, configured_store, "get", "contacts", "-l", "")
+    assert result.exit_code != 0
+
+
 def test_get_contact_by_name(runner, configured_store, fake_connection):
     script_contacts(fake_connection)
     result = invoke(runner, configured_store, "get", "contact", "alice")
@@ -128,6 +138,17 @@ def test_get_contact_unknown_errors(runner, configured_store, fake_connection):
     result = invoke(runner, configured_store, "get", "contact", "nope")
     assert result.exit_code != 0
     assert "no contact matching" in result.output
+
+
+def test_get_contact_ambiguous_name_errors(runner, configured_store, fake_connection):
+    dup_payload = {
+        "AA": {"adv_name": "dup", "public_key": "AA11", "type": 1, "out_path_len": -1},
+        "BB": {"adv_name": "dup", "public_key": "BB22", "type": 1, "out_path_len": -1},
+    }
+    fake_connection.commands.script("get_contacts", Event(EventType.CONTACTS, dup_payload))
+    result = invoke(runner, configured_store, "get", "contact", "dup")
+    assert result.exit_code != 0
+    assert "matches 2 contacts" in result.output
 
 
 # --- get channels / channel ----------------------------------------------------
@@ -259,6 +280,17 @@ def test_get_path_unknown_contact_errors(runner, configured_store, fake_connecti
     script_contacts(fake_connection)
     result = invoke(runner, configured_store, "get", "path", "nope")
     assert result.exit_code != 0
+
+
+def test_get_path_ambiguous_name_errors(runner, configured_store, fake_connection):
+    dup_payload = {
+        "AA": {"adv_name": "dup", "public_key": "AA11", "type": 1, "out_path_len": -1},
+        "BB": {"adv_name": "dup", "public_key": "BB22", "type": 1, "out_path_len": -1},
+    }
+    fake_connection.commands.script("get_contacts", Event(EventType.CONTACTS, dup_payload))
+    result = invoke(runner, configured_store, "get", "path", "dup")
+    assert result.exit_code != 0
+    assert "matches 2 contacts" in result.output
 
 
 # --- get time -------------------------------------------------------------------

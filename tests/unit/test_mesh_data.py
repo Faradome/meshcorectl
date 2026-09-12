@@ -6,6 +6,7 @@ from meshcore.events import Event
 
 from meshcorectl.mesh_data import (
     DEVICE_PARAMS,
+    AmbiguousMatchError,
     MeshDataError,
     collect_events,
     contact_type_name,
@@ -126,6 +127,34 @@ def test_find_contact_by_public_key_prefix():
 def test_find_contact_not_found():
     contacts = [normalize_contact({"adv_name": "Alice", "public_key": "AA11"})]
     assert find_contact(contacts, "bob") is None
+
+
+def test_find_contact_ambiguous_name_raises():
+    contacts = [
+        normalize_contact({"adv_name": "dup", "public_key": "AA11"}),
+        normalize_contact({"adv_name": "dup", "public_key": "BB22"}),
+    ]
+    with pytest.raises(AmbiguousMatchError, match="matches 2 contacts by name"):
+        find_contact(contacts, "dup")
+
+
+def test_find_contact_ambiguous_public_key_prefix_raises():
+    contacts = [
+        normalize_contact({"adv_name": "alice", "public_key": "AABBCC"}),
+        normalize_contact({"adv_name": "bob", "public_key": "AABBDD"}),
+    ]
+    with pytest.raises(AmbiguousMatchError, match="matches 2 contacts by public-key prefix"):
+        find_contact(contacts, "aabb")
+
+
+def test_find_contact_unambiguous_prefix_still_works_alongside_others():
+    """A prefix that narrows to exactly one contact must not be treated as
+    ambiguous just because other, non-matching contacts also exist."""
+    contacts = [
+        normalize_contact({"adv_name": "alice", "public_key": "AABBCC"}),
+        normalize_contact({"adv_name": "bob", "public_key": "112233"}),
+    ]
+    assert find_contact(contacts, "aabb") is contacts[0]
 
 
 # --- fetch_contacts ----------------------------------------------------------

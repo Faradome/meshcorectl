@@ -8,7 +8,7 @@ from typing import Any
 import click
 
 from ..connect import MeshCoreConnection
-from ..mesh_data import fetch_contacts, find_contact
+from ..mesh_data import AmbiguousMatchError, fetch_contacts, find_contact
 from ..mesh_data import login as login_data
 from ..mesh_data import logout as logout_data
 from ..selectors import SelectorError, filter_contacts
@@ -60,7 +60,10 @@ def login_command(
     async def run(connection: MeshCoreConnection) -> None:
         contacts = await fetch_contacts(connection)
         if name is not None:
-            contact = find_contact(contacts, name)
+            try:
+                contact = find_contact(contacts, name)
+            except AmbiguousMatchError as exc:
+                raise click.ClickException(str(exc)) from exc
             if contact is None:
                 raise click.ClickException(f"no contact matching {name!r}")
             targets = [contact]
@@ -97,7 +100,10 @@ def logout_command(state: Any, name: str, dry_run: bool) -> None:
 
     async def run(connection: MeshCoreConnection) -> None:
         contacts = await fetch_contacts(connection)
-        contact = find_contact(contacts, name)
+        try:
+            contact = find_contact(contacts, name)
+        except AmbiguousMatchError as exc:
+            raise click.ClickException(str(exc)) from exc
         if contact is None:
             raise click.ClickException(f"no contact matching {name!r}")
         if dry_run:

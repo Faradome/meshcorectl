@@ -27,6 +27,10 @@ class MeshDataError(Exception):
     """A device command returned `EventType.ERROR`, or timed out (returned None)."""
 
 
+class AmbiguousMatchError(ValueError):
+    """More than one contact matches a name or public-key-prefix lookup."""
+
+
 def contact_type_name(type_id: int) -> str:
     return CONTACT_TYPE_NAMES.get(type_id, f"unknown({type_id})")
 
@@ -89,14 +93,34 @@ async def fetch_contacts(connection: MeshCoreConnection) -> list[dict[str, Any]]
 def find_contact(contacts: list[dict[str, Any]], name_or_prefix: str) -> dict[str, Any] | None:
     """Case-insensitive match on name first, then public-key prefix --
     the same precedence as the `meshcore` library's own
-    get_contact_by_name/get_contact_by_key_prefix helpers."""
+    get_contact_by_name/get_contact_by_key_prefix helpers.
+
+    Raises `AmbiguousMatchError` if more than one contact matches at
+    whichever stage (name or prefix) produces a match, rather than
+    silently acting on whichever one happened to come first in the list --
+    the same "unambiguous or refuse" rule git applies to abbreviated commit
+    hashes.
+    """
     needle = name_or_prefix.lower()
-    for contact in contacts:
-        if contact["name"].lower() == needle:
-            return contact
-    for contact in contacts:
-        if contact["public_key"].lower().startswith(needle):
-            return contact
+    by_name = [c for c in contacts if c["name"].lower() == needle]
+    if len(by_name) > 1:
+        matches = ", ".join(f"{c['name']!r} ({c['public_key'][:8]})" for c in by_name)
+        raise AmbiguousMatchError(
+            f"{name_or_prefix!r} matches {len(by_name)} contacts by name: {matches} -- "
+            "use a public-key prefix instead"
+        )
+    if by_name:
+        return by_name[0]
+
+    by_prefix = [c for c in contacts if c["public_key"].lower().startswith(needle)]
+    if len(by_prefix) > 1:
+        matches = ", ".join(f"{c['name']!r} ({c['public_key'][:8]})" for c in by_prefix)
+        raise AmbiguousMatchError(
+            f"{name_or_prefix!r} matches {len(by_prefix)} contacts by public-key prefix: "
+            f"{matches} -- use a longer prefix"
+        )
+    if by_prefix:
+        return by_prefix[0]
     return None
 
 

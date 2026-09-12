@@ -8,6 +8,7 @@ import click
 
 from ..connect import MeshCoreConnection
 from ..mesh_data import (
+    AmbiguousMatchError,
     fetch_channels,
     fetch_contacts,
     find_channel,
@@ -74,7 +75,10 @@ def send_message(
     async def run(connection: MeshCoreConnection) -> None:
         contacts = await fetch_contacts(connection)
         if name is not None:
-            contact = find_contact(contacts, name)
+            try:
+                contact = find_contact(contacts, name)
+            except AmbiguousMatchError as exc:
+                raise click.ClickException(str(exc)) from exc
             if contact is None:
                 raise click.ClickException(f"no contact matching {name!r}")
             targets = [contact]

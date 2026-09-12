@@ -9,7 +9,7 @@ from typing import Any
 import click
 
 from ..connect import MeshCoreConnection
-from ..mesh_data import fetch_contacts, find_contact
+from ..mesh_data import AmbiguousMatchError, fetch_contacts, find_contact
 from ..mesh_data import run_repeater_command as run_repeater_command_data
 from ..selectors import SelectorError, filter_contacts
 
@@ -73,7 +73,10 @@ def exec_command(
     async def run(connection: MeshCoreConnection) -> None:
         contacts = await fetch_contacts(connection)
         if name is not None:
-            contact = find_contact(contacts, name)
+            try:
+                contact = find_contact(contacts, name)
+            except AmbiguousMatchError as exc:
+                raise click.ClickException(str(exc)) from exc
             if contact is None:
                 raise click.ClickException(f"no contact matching {name!r}")
             targets = [contact]

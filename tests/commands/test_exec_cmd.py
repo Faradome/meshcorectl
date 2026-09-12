@@ -41,6 +41,17 @@ def test_exec_unknown_contact_errors(runner, configured_store, fake_connection):
     assert "no contact matching" in result.output
 
 
+def test_exec_ambiguous_name_errors(runner, configured_store, fake_connection):
+    dup_payload = {
+        "AA": {"adv_name": "dup", "public_key": "AA11", "type": 2, "out_path_len": 0},
+        "BB": {"adv_name": "dup", "public_key": "BB22", "type": 2, "out_path_len": 0},
+    }
+    fake_connection.commands.script("get_contacts", Event(EventType.CONTACTS, dup_payload))
+    result = invoke(runner, configured_store, "exec", "dup", "--", "ver")
+    assert result.exit_code != 0
+    assert "matches 2 contacts" in result.output
+
+
 def test_exec_requires_a_command(runner, configured_store, fake_connection):
     result = invoke(runner, configured_store, "exec", "rep1")
     assert result.exit_code != 0

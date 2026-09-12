@@ -63,6 +63,33 @@ def test_parse_selector_garbage_raises():
         parse_selector("not-a-clause-at-all")
 
 
+def test_parse_selector_whitespace_only_raises():
+    with pytest.raises(SelectorError, match="empty selector"):
+        parse_selector("   ")
+
+
+def test_parse_selector_non_integer_hops_raises():
+    """`h` needs an integer; a bad value must be rejected here, at parse
+    time -- not surface as a raw ValueError out of `int()` deep inside
+    `matches()`, after a command has already connected to a device."""
+    with pytest.raises(SelectorError, match="'h' needs an integer hop count"):
+        parse_selector("h>abc")
+
+
+def test_parse_selector_non_duration_lastmod_raises():
+    """Same as above, for `u`: neither a duration suffix nor a bare number."""
+    with pytest.raises(SelectorError, match="'u' needs a duration"):
+        parse_selector("u<not-a-duration")
+
+
+def test_parse_selector_valid_hops_and_duration_values_pass():
+    # Regression guard: the validation added for the two tests above must
+    # not reject the values it's supposed to accept.
+    parse_selector("h>2")
+    parse_selector("u<2d")
+    parse_selector("u>1500000000")  # a bare epoch timestamp is also valid
+
+
 # --- matches: t (type) ----------------------------------------------------------
 
 
@@ -148,7 +175,16 @@ def test_matches_all_clauses_must_hold():
 def test_filter_contacts_no_selector_returns_all():
     contacts = [{"type": "client"}, {"type": "repeater"}]
     assert filter_contacts(contacts, None) == contacts
-    assert filter_contacts(contacts, "") == contacts
+
+
+def test_filter_contacts_explicit_empty_string_raises():
+    """An empty `-l ""` is what a shell hands over for `-l "$VAR"` when
+    $VAR is unset/empty -- it must be rejected as an invalid selector, not
+    silently treated the same as "-l wasn't passed at all" and match every
+    contact on a command like `delete`."""
+    contacts = [{"type": "client"}, {"type": "repeater"}]
+    with pytest.raises(SelectorError, match="empty selector"):
+        filter_contacts(contacts, "")
 
 
 def test_filter_contacts_applies_selector():

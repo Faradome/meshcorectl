@@ -58,6 +58,17 @@ def test_top_contact_unknown_errors(runner, configured_store, fake_connection):
     assert "no contact matching" in result.output
 
 
+def test_top_contact_ambiguous_name_errors(runner, configured_store, fake_connection):
+    dup_payload = {
+        "AA": {"adv_name": "dup", "public_key": "AA11", "type": 4, "out_path_len": -1},
+        "BB": {"adv_name": "dup", "public_key": "BB22", "type": 4, "out_path_len": -1},
+    }
+    fake_connection.commands.script("get_contacts", Event(EventType.CONTACTS, dup_payload))
+    result = invoke(runner, configured_store, "top", "contact", "dup")
+    assert result.exit_code != 0
+    assert "matches 2 contacts" in result.output
+
+
 def test_top_contact_no_readings_prints_hint(runner, configured_store, fake_connection):
     script_alice(fake_connection)
     fake_connection.commands.script("req_telemetry_sync", [])

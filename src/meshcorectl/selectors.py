@@ -73,11 +73,38 @@ def _parse_value_clause(segment: str) -> Clause:
                 )
             if not value:
                 raise SelectorError(f"missing value in selector clause {segment!r}")
+            _validate_value(field, value, segment)
             return Clause(field=field, op=op, value=value)
     raise SelectorError(
         f"invalid selector clause {segment!r}: expected 'field<op>value' (op one of "
         f"{', '.join(_OPS)}), or a bare 'd'/'f' flag"
     )
+
+
+def _validate_value(field: str, value: str, segment: str) -> None:
+    """Raise `SelectorError` for a value that would blow up later as a raw
+    `ValueError` inside `_matches_one`/`_resolve_time_value` -- e.g.
+    `-l 'h>abc'`. Validating at parse time means a bad selector is rejected
+    before a command connects to a device or acts on anything, the same as
+    an unknown field already is above."""
+    if field == "h":
+        try:
+            int(value)
+        except ValueError:
+            raise SelectorError(
+                f"invalid selector clause {segment!r}: 'h' needs an integer hop count, "
+                f"got {value!r}"
+            ) from None
+    elif field == "u":
+        try:
+            _resolve_time_value(value)
+        except ValueError:
+            raise SelectorError(
+                f"invalid selector clause {segment!r}: 'u' needs a duration (e.g. '2d', "
+                f"'1h', '30m') or an epoch timestamp, got {value!r}"
+            ) from None
+    # 't' accepts any non-empty string: matched case-insensitively by name,
+    # or numerically via contact_type_name -- there's no invalid shape to reject.
 
 
 def matches(contact: dict[str, Any], clauses: list[Clause]) -> bool:
@@ -132,9 +159,18 @@ def _resolve_time_value(value: str) -> float:
 def filter_contacts(
     contacts: list[dict[str, Any]], selector_text: str | None
 ) -> list[dict[str, Any]]:
-    """Apply an optional `-l` selector to a contact list; `None`/empty
-    returns every contact unfiltered."""
-    if not selector_text:
+    """Apply a `-l` selector to a contact list.
+
+    `None` -- the flag wasn't given at all -- returns every contact
+    unfiltered. An explicitly empty string is deliberately *not* treated
+    the same way: it's what a shell hands over for `-l "$VAR"` when `$VAR`
+    is unset or empty, and silently matching every contact on a command
+    like `delete` in that case would be exactly the kind of thing that
+    variable-expansion typo should never do quietly. `parse_selector`
+    raises `SelectorError` for it (and for a whitespace-only string), same
+    as any other malformed selector.
+    """
+    if selector_text is None:
         return contacts
     clauses = parse_selector(selector_text)
     return [c for c in contacts if matches(c, clauses)]

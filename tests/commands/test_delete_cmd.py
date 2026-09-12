@@ -31,6 +31,20 @@ def test_delete_contact_unknown_name_errors(runner, configured_store, fake_conne
     assert "no contact matching" in result.output
 
 
+def test_delete_contact_ambiguous_name_errors_without_deleting(
+    runner, configured_store, fake_connection
+):
+    dup_payload = {
+        "AA": {"adv_name": "dup", "public_key": "AA11", "type": 1, "out_path_len": -1},
+        "BB": {"adv_name": "dup", "public_key": "BB22", "type": 1, "out_path_len": -1},
+    }
+    fake_connection.commands.script("get_contacts", Event(EventType.CONTACTS, dup_payload))
+    result = invoke(runner, configured_store, "delete", "contact", "dup")
+    assert result.exit_code != 0
+    assert "matches 2 contacts" in result.output
+    assert fake_connection.commands.call_count("remove_contact") == 0
+
+
 def test_delete_contact_requires_name_or_selector(runner, configured_store, fake_connection):
     result = invoke(runner, configured_store, "delete", "contact")
     assert result.exit_code != 0
@@ -64,6 +78,17 @@ def test_delete_contact_bad_selector_errors(runner, configured_store, fake_conne
     script_contacts(fake_connection)
     result = invoke(runner, configured_store, "delete", "contact", "-l", "bogus")
     assert result.exit_code != 0
+
+
+def test_delete_contact_empty_selector_errors_without_deleting(
+    runner, configured_store, fake_connection
+):
+    """`-l ""` (e.g. an unset `-l "$VAR"`) must not be treated as "no
+    filter" and delete every contact on the device."""
+    script_contacts(fake_connection)
+    result = invoke(runner, configured_store, "delete", "contact", "-l", "")
+    assert result.exit_code != 0
+    assert fake_connection.commands.call_count("remove_contact") == 0
 
 
 def test_delete_contact_dry_run_does_not_call_remove(runner, configured_store, fake_connection):

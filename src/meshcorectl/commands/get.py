@@ -11,6 +11,7 @@ import click
 from meshcore import EventType
 
 from ..mesh_data import (
+    AmbiguousMatchError,
     collect_events,
     fetch_channels,
     fetch_contacts,
@@ -52,7 +53,11 @@ def get_device(state: Any, output_override: str | None) -> None:
 def get_contacts(state: Any, selector_text: str | None, output_override: str | None) -> None:
     """List every contact (client/repeater/room/sensor) known to the device."""
     contacts = state.call(fetch_contacts)
-    if selector_text:
+    if selector_text is not None:
+        # `is not None`, not truthy: an explicitly empty `-l ""` (e.g. an
+        # unset shell variable expanding to nothing) must be rejected by
+        # filter_contacts as an invalid selector, not silently treated the
+        # same as "-l wasn't passed at all" and match everything.
         try:
             contacts = filter_contacts(contacts, selector_text)
         except SelectorError as exc:
@@ -70,7 +75,10 @@ def get_contacts(state: Any, selector_text: str | None, output_override: str | N
 def get_contact(state: Any, name: str, output_override: str | None) -> None:
     """Show one contact by name or public-key prefix."""
     contacts = state.call(fetch_contacts)
-    contact = find_contact(contacts, name)
+    try:
+        contact = find_contact(contacts, name)
+    except AmbiguousMatchError as exc:
+        raise click.ClickException(str(exc)) from exc
     if contact is None:
         raise click.ClickException(f"no contact matching {name!r}")
     click.echo(render(contact, resolve_output(state.output, output_override), kind="contact"))
@@ -156,7 +164,10 @@ def get_pending_contacts(state: Any, output_override: str | None) -> None:
 def get_path(state: Any, name: str, output_override: str | None) -> None:
     """Show the routing path to a contact (flood, direct, or a hop list)."""
     contacts = state.call(fetch_contacts)
-    contact = find_contact(contacts, name)
+    try:
+        contact = find_contact(contacts, name)
+    except AmbiguousMatchError as exc:
+        raise click.ClickException(str(exc)) from exc
     if contact is None:
         raise click.ClickException(f"no contact matching {name!r}")
     result = {"name": contact["name"], "path": contact["path"]}

@@ -94,6 +94,17 @@ def test_login_unknown_contact_errors(runner, configured_store, fake_connection)
     assert "no contact matching" in result.output
 
 
+def test_login_ambiguous_name_errors(runner, configured_store, fake_connection):
+    dup_payload = {
+        "AA": {"adv_name": "dup", "public_key": "AA11", "type": 2, "out_path_len": 0},
+        "BB": {"adv_name": "dup", "public_key": "BB22", "type": 2, "out_path_len": 0},
+    }
+    fake_connection.commands.script("get_contacts", Event(EventType.CONTACTS, dup_payload))
+    result = invoke(runner, configured_store, "login", "dup", "--password", "x")
+    assert result.exit_code != 0
+    assert "matches 2 contacts" in result.output
+
+
 def test_login_by_selector(runner, configured_store, fake_connection):
     script_contacts(fake_connection)
     fake_connection.commands.script(
@@ -143,6 +154,17 @@ def test_logout_unknown_contact_errors(runner, configured_store, fake_connection
     result = invoke(runner, configured_store, "logout", "nope")
     assert result.exit_code != 0
     assert "no contact matching" in result.output
+
+
+def test_logout_ambiguous_name_errors(runner, configured_store, fake_connection):
+    dup_payload = {
+        "AA": {"adv_name": "dup", "public_key": "AA11", "type": 2, "out_path_len": 0},
+        "BB": {"adv_name": "dup", "public_key": "BB22", "type": 2, "out_path_len": 0},
+    }
+    fake_connection.commands.script("get_contacts", Event(EventType.CONTACTS, dup_payload))
+    result = invoke(runner, configured_store, "logout", "dup")
+    assert result.exit_code != 0
+    assert "matches 2 contacts" in result.output
 
 
 def test_logout_error(runner, configured_store, fake_connection):

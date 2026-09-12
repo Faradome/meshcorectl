@@ -13,7 +13,7 @@ from typing import Any
 
 import click
 
-from ..mesh_data import fetch_contacts, fetch_device, find_contact
+from ..mesh_data import AmbiguousMatchError, fetch_contacts, fetch_device, find_contact
 
 
 @click.group(name="describe")
@@ -35,7 +35,10 @@ def describe_device(state: Any) -> None:
 def describe_contact(state: Any, name: str) -> None:
     """Describe one contact by name or public-key prefix."""
     contacts = state.call(fetch_contacts)
-    contact = find_contact(contacts, name)
+    try:
+        contact = find_contact(contacts, name)
+    except AmbiguousMatchError as exc:
+        raise click.ClickException(str(exc)) from exc
     if contact is None:
         raise click.ClickException(f"no contact matching {name!r}")
     click.echo(_describe_contact_text(contact))

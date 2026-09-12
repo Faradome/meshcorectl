@@ -9,7 +9,13 @@ import click
 
 from ..connect import MeshCoreConnection
 from ..durations import parse_duration
-from ..mesh_data import fetch_contacts, fetch_telemetry, fetch_telemetry_history, find_contact
+from ..mesh_data import (
+    AmbiguousMatchError,
+    fetch_contacts,
+    fetch_telemetry,
+    fetch_telemetry_history,
+    find_contact,
+)
 from ..output import output_option, render, resolve_output
 
 
@@ -52,7 +58,10 @@ def top_contact(
     # send/delete/exec/login.
     async def run(connection: MeshCoreConnection) -> list[dict[str, Any]]:
         contacts = await fetch_contacts(connection)
-        contact = find_contact(contacts, name)
+        try:
+            contact = find_contact(contacts, name)
+        except AmbiguousMatchError as exc:
+            raise click.ClickException(str(exc)) from exc
         if contact is None:
             raise click.ClickException(f"no contact matching {name!r}")
         if history:
