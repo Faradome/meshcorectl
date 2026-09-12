@@ -12,7 +12,7 @@ import yaml
 
 from .. import __version__
 from ..mesh_data import fetch_device
-from ..output import OutputFormat
+from ..output import OutputFormat, output_option, resolve_output
 
 
 @click.command(name="version")
@@ -22,8 +22,9 @@ from ..output import OutputFormat
     is_flag=True,
     help="Only print the client (this CLI's) version; don't connect to a device.",
 )
+@output_option
 @click.pass_obj
-def version_command(state: Any, client_only: bool) -> None:
+def version_command(state: Any, client_only: bool, output_override: str | None) -> None:
     """Print the client version and, unless --client, the device's version."""
     info: dict[str, Any] = {"client_version": __version__}
     if not client_only:
@@ -35,7 +36,7 @@ def version_command(state: Any, client_only: bool) -> None:
             "protocol": device.get("fw ver"),
             "build": device.get("fw_build"),
         }
-    click.echo(format_version(info, state.output))
+    click.echo(format_version(info, resolve_output(state.output, output_override)))
 
 
 def format_version(info: dict[str, Any], fmt: OutputFormat) -> str:

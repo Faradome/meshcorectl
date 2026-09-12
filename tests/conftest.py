@@ -31,10 +31,20 @@ def fake_connection(monkeypatch):
     """Monkeypatches `meshcorectl.cli.connect` so `CliState.connect()`
     (and everything built on it: `.connected()`, `.call()`) hands back this
     `FakeMeshCore` instead of ever touching real BLE/serial/TCP -- the same
-    seam Phase 1's `tests/unit/test_cli_state.py` exercises directly."""
+    seam Phase 1's `tests/unit/test_cli_state.py` exercises directly.
+
+    `connect_call_count` tracks how many times a command actually opened a
+    connection: live hardware testing found `top contact` opening two
+    (contact resolution + the telemetry fetch, as two separate `state.call()`s
+    instead of one) -- which this fixture, always handing back the *same*
+    fake regardless of call count, couldn't have caught on its own. Commands
+    that only need one connection should assert `== 1`.
+    """
     fake = FakeMeshCore()
+    fake.connect_call_count = 0
 
     async def fake_connect(connection_spec, *, timeout, debug):
+        fake.connect_call_count += 1
         return fake
 
     monkeypatch.setattr("meshcorectl.cli.connect", fake_connect)

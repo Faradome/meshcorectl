@@ -100,9 +100,12 @@ Usage: meshcorectl advert [OPTIONS]
   Send an advertisement packet announcing this device.
 
 Options:
-  --flood    Flood the advert instead of sending a normal (zero-hop) one.
-  --dry-run  Show what would be sent without sending it.
-  --help     Show this message and exit.
+  --flood              Flood the advert instead of sending a normal (zero-hop)
+                       one.
+  --dry-run            Show what would be sent without sending it.
+  -o, --output FORMAT  Output format for this command
+                       (table|wide|json|yaml|name); overrides the global -o.
+  --help               Show this message and exit.
 ```
 
 ## `meshcorectl completion`
@@ -216,7 +219,9 @@ Usage: meshcorectl config view [OPTIONS]
   Print the full contents of the config file.
 
 Options:
-  --help  Show this message and exit.
+  -o, --output FORMAT  Output format for this command
+                       (table|wide|json|yaml|name); overrides the global -o.
+  --help               Show this message and exit.
 ```
 
 ## `meshcorectl create`
@@ -245,8 +250,10 @@ Usage: meshcorectl create channel [OPTIONS] INDEX NAME [KEY]
   starts with '#').
 
 Options:
-  --dry-run  Show what would be created without doing it.
-  --help     Show this message and exit.
+  --dry-run            Show what would be created without doing it.
+  -o, --output FORMAT  Output format for this command
+                       (table|wide|json|yaml|name); overrides the global -o.
+  --help               Show this message and exit.
 ```
 
 ## `meshcorectl create contact`
@@ -257,9 +264,11 @@ Usage: meshcorectl create contact [OPTIONS]
   Import a contact from its meshcore:// card URI.
 
 Options:
-  --uri URI  A meshcore:// contact card URI.  [required]
-  --dry-run  Show what would be imported without doing it.
-  --help     Show this message and exit.
+  --uri URI            A meshcore:// contact card URI.  [required]
+  --dry-run            Show what would be imported without doing it.
+  -o, --output FORMAT  Output format for this command
+                       (table|wide|json|yaml|name); overrides the global -o.
+  --help               Show this message and exit.
 ```
 
 ## `meshcorectl delete`
@@ -394,7 +403,9 @@ Usage: meshcorectl get channel [OPTIONS] INDEX_OR_NAME
   Show one channel by index or name.
 
 Options:
-  --help  Show this message and exit.
+  -o, --output FORMAT  Output format for this command
+                       (table|wide|json|yaml|name); overrides the global -o.
+  --help               Show this message and exit.
 ```
 
 ## `meshcorectl get channels`
@@ -405,7 +416,9 @@ Usage: meshcorectl get channels [OPTIONS]
   List every configured channel.
 
 Options:
-  --help  Show this message and exit.
+  -o, --output FORMAT  Output format for this command
+                       (table|wide|json|yaml|name); overrides the global -o.
+  --help               Show this message and exit.
 ```
 
 ## `meshcorectl get contact`
@@ -416,7 +429,9 @@ Usage: meshcorectl get contact [OPTIONS] NAME
   Show one contact by name or public-key prefix.
 
 Options:
-  --help  Show this message and exit.
+  -o, --output FORMAT  Output format for this command
+                       (table|wide|json|yaml|name); overrides the global -o.
+  --help               Show this message and exit.
 ```
 
 ## `meshcorectl get contacts`
@@ -427,7 +442,12 @@ Usage: meshcorectl get contacts [OPTIONS]
   List every contact (client/repeater/room/sensor) known to the device.
 
 Options:
-  --help  Show this message and exit.
+  -l, --selector SELECTOR  Only list contacts matching this filter, e.g.
+                           't=repeater,u<2d'.
+  -o, --output FORMAT      Output format for this command
+                           (table|wide|json|yaml|name); overrides the global
+                           -o.
+  --help                   Show this message and exit.
 ```
 
 ## `meshcorectl get device`
@@ -438,7 +458,9 @@ Usage: meshcorectl get device [OPTIONS]
   Show the connected device's advertised info and firmware/protocol query.
 
 Options:
-  --help  Show this message and exit.
+  -o, --output FORMAT  Output format for this command
+                       (table|wide|json|yaml|name); overrides the global -o.
+  --help               Show this message and exit.
 ```
 
 ## `meshcorectl get path`
@@ -449,7 +471,9 @@ Usage: meshcorectl get path [OPTIONS] NAME
   Show the routing path to a contact (flood, direct, or a hop list).
 
 Options:
-  --help  Show this message and exit.
+  -o, --output FORMAT  Output format for this command
+                       (table|wide|json|yaml|name); overrides the global -o.
+  --help               Show this message and exit.
 ```
 
 ## `meshcorectl get pending-contacts`
@@ -465,7 +489,9 @@ Usage: meshcorectl get pending-contacts [OPTIONS]
   Re-run (or pass a longer --timeout) to catch more.
 
 Options:
-  --help  Show this message and exit.
+  -o, --output FORMAT  Output format for this command
+                       (table|wide|json|yaml|name); overrides the global -o.
+  --help               Show this message and exit.
 ```
 
 ## `meshcorectl get time`
@@ -476,7 +502,9 @@ Usage: meshcorectl get time [OPTIONS]
   Show the device's current clock.
 
 Options:
-  --help  Show this message and exit.
+  -o, --output FORMAT  Output format for this command
+                       (table|wide|json|yaml|name); overrides the global -o.
+  --help               Show this message and exit.
 ```
 
 ## `meshcorectl login`
@@ -516,13 +544,15 @@ Usage: meshcorectl logs [OPTIONS]
   Show messages received by the device.
 
 Options:
-  -f, --follow      Keep the connection open and print new messages as they
-                    arrive.
-  --since DURATION  Only show already-queued messages newer than this, e.g.
-                    30m, 2h.
-  --rx              Follow the raw rx-log packet stream instead of messages
-                    (requires --follow).
-  --help            Show this message and exit.
+  -f, --follow         Keep the connection open and print new messages as they
+                       arrive.
+  --since DURATION     Only show already-queued messages newer than this, e.g.
+                       30m, 2h.
+  --rx                 Follow the raw rx-log packet stream instead of messages
+                       (requires --follow).
+  -o, --output FORMAT  Output format for this command
+                       (table|wide|json|yaml|name); overrides the global -o.
+  --help               Show this message and exit.
 ```
 
 ## `meshcorectl reboot`
@@ -533,10 +563,12 @@ Usage: meshcorectl reboot [OPTIONS]
   Reboot the connected device.
 
 Options:
-  --yes      Confirm the reboot; required, since there is no interactive
-             prompt.
-  --dry-run  Show what would happen without rebooting.
-  --help     Show this message and exit.
+  --yes                Confirm the reboot; required, since there is no
+                       interactive prompt.
+  --dry-run            Show what would happen without rebooting.
+  -o, --output FORMAT  Output format for this command
+                       (table|wide|json|yaml|name); overrides the global -o.
+  --help               Show this message and exit.
 ```
 
 ## `meshcorectl scan`
@@ -550,6 +582,9 @@ Options:
   --ble / --no-ble        Include BLE devices.
   --serial / --no-serial  Include serial ports.
   --timeout SECONDS       BLE scan duration.  [default: 2.0]
+  -o, --output FORMAT     Output format for this command
+                          (table|wide|json|yaml|name); overrides the global
+                          -o.
   --help                  Show this message and exit.
 ```
 
@@ -627,8 +662,10 @@ Usage: meshcorectl set device [OPTIONS] PARAM VALUE
   telemetry-mode-base, telemetry-mode-env, telemetry-mode-loc, tx-power
 
 Options:
-  --dry-run  Show what would be set without setting it.
-  --help     Show this message and exit.
+  --dry-run            Show what would be set without setting it.
+  -o, --output FORMAT  Output format for this command
+                       (table|wide|json|yaml|name); overrides the global -o.
+  --help               Show this message and exit.
 ```
 
 ## `meshcorectl top`
@@ -653,10 +690,12 @@ Usage: meshcorectl top contact [OPTIONS] NAME
   Request telemetry from a contact (typically a sensor).
 
 Options:
-  --history         Show min/max/avg history instead of instant readings.
-  --since DURATION  History window for --history, e.g. 30m, 2h, 1d.  [default:
-                    1h]
-  --help            Show this message and exit.
+  --history            Show min/max/avg history instead of instant readings.
+  --since DURATION     History window for --history, e.g. 30m, 2h, 1d.
+                       [default: 1h]
+  -o, --output FORMAT  Output format for this command
+                       (table|wide|json|yaml|name); overrides the global -o.
+  --help               Show this message and exit.
 ```
 
 ## `meshcorectl trace`
@@ -668,8 +707,10 @@ Usage: meshcorectl trace [OPTIONS] PATH
   prefixes (e.g. "23,5f,3a").
 
 Options:
-  --timeout SECONDS  Override the device-suggested wait for the trace reply.
-  --help             Show this message and exit.
+  --timeout SECONDS    Override the device-suggested wait for the trace reply.
+  -o, --output FORMAT  Output format for this command
+                       (table|wide|json|yaml|name); overrides the global -o.
+  --help               Show this message and exit.
 ```
 
 ## `meshcorectl version`
@@ -680,7 +721,9 @@ Usage: meshcorectl version [OPTIONS]
   Print the client version and, unless --client, the device's version.
 
 Options:
-  --client  Only print the client (this CLI's) version; don't connect to a
-            device.
-  --help    Show this message and exit.
+  --client             Only print the client (this CLI's) version; don't
+                       connect to a device.
+  -o, --output FORMAT  Output format for this command
+                       (table|wide|json|yaml|name); overrides the global -o.
+  --help               Show this message and exit.
 ```

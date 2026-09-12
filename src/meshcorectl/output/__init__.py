@@ -9,10 +9,11 @@ across every resource kind.
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from enum import Enum
-from typing import Any
+from typing import Any, TypeVar
 
+import click
 import yaml
 
 from . import resources as resources
@@ -76,3 +77,35 @@ def render_result(result: Mapping[str, Any], fmt: OutputFormat, text: str) -> st
     if fmt is OutputFormat.YAML:
         return yaml.safe_dump(result, sort_keys=False).rstrip("\n")
     return text
+
+
+_F = TypeVar("_F", bound=Callable[..., Any])
+
+
+def output_option(f: _F) -> _F:
+    """A per-command `-o/--output` override.
+
+    The global `-o` (on the root group) only takes effect *before* the
+    subcommand (`meshcorectl -o json get device`) -- real `kubectl` also
+    accepts it after the verb (`kubectl get pods -o json`), which is the
+    far more common muscle-memory order and was found broken (Click has no
+    "recognize a parent group's option after a subcommand" mechanism) during
+    live hardware testing. Every command that renders through `render()`/
+    `render_result()` takes this local override too; `resolve_output()`
+    prefers it over the global one when both are given.
+    """
+    return click.option(
+        "-o",
+        "--output",
+        "output_override",
+        type=click.Choice([fmt.value for fmt in OutputFormat]),
+        default=None,
+        metavar="FORMAT",
+        help="Output format for this command (table|wide|json|yaml|name); overrides the global -o.",
+    )(f)
+
+
+def resolve_output(state_output: OutputFormat, output_override: str | None) -> OutputFormat:
+    """`state_output` is the global `-o` (already resolved by the root
+    group); `output_override` is this command's own `-o`, if given."""
+    return OutputFormat(output_override) if output_override is not None else state_output

@@ -20,7 +20,8 @@ from ..mesh_data import (
     find_contact,
     normalize_contact,
 )
-from ..output import render
+from ..output import output_option, render, resolve_output
+from ..selectors import SelectorError, filter_contacts
 
 
 @click.group(name="get")
@@ -29,62 +30,81 @@ def get_group() -> None:
 
 
 @get_group.command("device")
+@output_option
 @click.pass_obj
-def get_device(state: Any) -> None:
+def get_device(state: Any, output_override: str | None) -> None:
     """Show the connected device's advertised info and firmware/protocol query."""
     device = state.call(fetch_device)
-    click.echo(render(device, state.output, kind="device"))
+    click.echo(render(device, resolve_output(state.output, output_override), kind="device"))
 
 
 @get_group.command("contacts")
+@click.option(
+    "-l",
+    "--selector",
+    "selector_text",
+    default=None,
+    metavar="SELECTOR",
+    help="Only list contacts matching this filter, e.g. 't=repeater,u<2d'.",
+)
+@output_option
 @click.pass_obj
-def get_contacts(state: Any) -> None:
+def get_contacts(state: Any, selector_text: str | None, output_override: str | None) -> None:
     """List every contact (client/repeater/room/sensor) known to the device."""
     contacts = state.call(fetch_contacts)
+    if selector_text:
+        try:
+            contacts = filter_contacts(contacts, selector_text)
+        except SelectorError as exc:
+            raise click.ClickException(str(exc)) from exc
     if not contacts:
         click.echo("No contacts.", err=True)
         return
-    click.echo(render(contacts, state.output, kind="contact"))
+    click.echo(render(contacts, resolve_output(state.output, output_override), kind="contact"))
 
 
 @get_group.command("contact")
 @click.argument("name")
+@output_option
 @click.pass_obj
-def get_contact(state: Any, name: str) -> None:
+def get_contact(state: Any, name: str, output_override: str | None) -> None:
     """Show one contact by name or public-key prefix."""
     contacts = state.call(fetch_contacts)
     contact = find_contact(contacts, name)
     if contact is None:
         raise click.ClickException(f"no contact matching {name!r}")
-    click.echo(render(contact, state.output, kind="contact"))
+    click.echo(render(contact, resolve_output(state.output, output_override), kind="contact"))
 
 
 @get_group.command("channels")
+@output_option
 @click.pass_obj
-def get_channels(state: Any) -> None:
+def get_channels(state: Any, output_override: str | None) -> None:
     """List every configured channel."""
     channels = state.call(fetch_channels)
     if not channels:
         click.echo("No channels configured.", err=True)
         return
-    click.echo(render(channels, state.output, kind="channel"))
+    click.echo(render(channels, resolve_output(state.output, output_override), kind="channel"))
 
 
 @get_group.command("channel")
 @click.argument("index_or_name")
+@output_option
 @click.pass_obj
-def get_channel(state: Any, index_or_name: str) -> None:
+def get_channel(state: Any, index_or_name: str, output_override: str | None) -> None:
     """Show one channel by index or name."""
     channels = state.call(fetch_channels)
     channel = find_channel(channels, index_or_name)
     if channel is None:
         raise click.ClickException(f"no channel matching {index_or_name!r}")
-    click.echo(render(channel, state.output, kind="channel"))
+    click.echo(render(channel, resolve_output(state.output, output_override), kind="channel"))
 
 
 @get_group.command("pending-contacts")
+@output_option
 @click.pass_obj
-def get_pending_contacts(state: Any) -> None:
+def get_pending_contacts(state: Any, output_override: str | None) -> None:
     """Watch for adverts from not-yet-added contacts, for one timeout window.
 
     Unlike a long-lived session, a one-shot connection has no pre-existing
@@ -106,25 +126,28 @@ def get_pending_contacts(state: Any) -> None:
     if not contacts:
         click.echo("No pending contacts seen in this window.", err=True)
         return
-    click.echo(render(contacts, state.output, kind="pending-contact"))
+    fmt = resolve_output(state.output, output_override)
+    click.echo(render(contacts, fmt, kind="pending-contact"))
 
 
 @get_group.command("path")
 @click.argument("name")
+@output_option
 @click.pass_obj
-def get_path(state: Any, name: str) -> None:
+def get_path(state: Any, name: str, output_override: str | None) -> None:
     """Show the routing path to a contact (flood, direct, or a hop list)."""
     contacts = state.call(fetch_contacts)
     contact = find_contact(contacts, name)
     if contact is None:
         raise click.ClickException(f"no contact matching {name!r}")
     result = {"name": contact["name"], "path": contact["path"]}
-    click.echo(render(result, state.output, kind="path"))
+    click.echo(render(result, resolve_output(state.output, output_override), kind="path"))
 
 
 @get_group.command("time")
+@output_option
 @click.pass_obj
-def get_time(state: Any) -> None:
+def get_time(state: Any, output_override: str | None) -> None:
     """Show the device's current clock."""
     result = state.call(fetch_time)
-    click.echo(render(result, state.output, kind="time"))
+    click.echo(render(result, resolve_output(state.output, output_override), kind="time"))

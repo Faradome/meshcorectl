@@ -110,24 +110,69 @@ def test_logs_follow_subscribes_and_prints_live_messages(
     runner, configured_store, fake_connection, monkeypatch
 ):
     script_no_contacts_or_channels(fake_connection)
-    fake_connection.commands.script("get_msg", Event(EventType.NO_MORE_MSGS, {}))
+    # CONTACT_MSG_RECV/CHANNEL_MSG_RECV aren't passively pushed (confirmed on
+    # real hardware): a live message only ever surfaces via get_msg(),
+    # triggered here by a MESSAGES_WAITING push -- not by subscribing to the
+    # message-event types directly (that was the bug).
+    fake_connection.commands.script(
+        "get_msg",
+        Event(EventType.NO_MORE_MSGS, {}),  # initial drain: nothing queued yet
+        Event(
+            EventType.CONTACT_MSG_RECV,
+            {"type": "PRIV", "pubkey_prefix": "deadbeef", "text": "live"},
+        ),
+        Event(EventType.NO_MORE_MSGS, {}),  # the follow-triggered drain ends
+    )
 
     async def fake_wait():
-        # Simulate a message arriving while "following", by directly
-        # invoking whichever handler(s) got subscribed.
+        # Simulate a MESSAGES_WAITING push while "following": invoke
+        # whichever handler got subscribed to it, then yield to the loop so
+        # the background drain task it schedules actually gets to run
+        # before this (and the whole command) returns.
         for event_type, handler in fake_connection.subscriptions:
-            if event_type == EventType.CONTACT_MSG_RECV:
-                handler(
-                    Event(
-                        EventType.CONTACT_MSG_RECV,
-                        {"type": "PRIV", "pubkey_prefix": "deadbeef", "text": "live"},
-                    )
-                )
+            if event_type == EventType.MESSAGES_WAITING:
+                handler(Event(EventType.MESSAGES_WAITING, {}))
+        await asyncio.sleep(0.05)
 
     monkeypatch.setattr("meshcorectl.commands.logs.wait_until_interrupted", fake_wait)
     result = invoke(runner, configured_store, "logs", "--follow")
     assert result.exit_code == 0, result.output
     assert "deadbeef: live" in result.output
+
+
+def test_logs_follow_ignores_duplicate_messages_waiting_while_a_drain_is_in_flight(
+    runner, configured_store, fake_connection, monkeypatch
+):
+    script_no_contacts_or_channels(fake_connection)
+    fake_connection.commands.script(
+        "get_msg",
+        Event(EventType.NO_MORE_MSGS, {}),  # initial drain
+        Event(EventType.CONTACT_MSG_RECV, {"type": "PRIV", "pubkey_prefix": "aa", "text": "one"}),
+        Event(EventType.NO_MORE_MSGS, {}),  # the (only) follow-triggered drain ends
+    )
+
+    async def fake_wait():
+        handlers = [
+            handler
+            for event_type, handler in fake_connection.subscriptions
+            if event_type == EventType.MESSAGES_WAITING
+        ]
+        # Fire it twice back-to-back, before yielding to the loop: the
+        # second call must see the first drain task already scheduled
+        # (created, not yet run) and skip starting a second one.
+        for handler in handlers:
+            handler(Event(EventType.MESSAGES_WAITING, {}))
+            handler(Event(EventType.MESSAGES_WAITING, {}))
+        await asyncio.sleep(0.05)
+
+    monkeypatch.setattr("meshcorectl.commands.logs.wait_until_interrupted", fake_wait)
+    result = invoke(runner, configured_store, "logs", "--follow")
+    assert result.exit_code == 0, result.output
+    assert "aa: one" in result.output
+    # 1 (initial drain) + 2 (one drain's worth of get_msg calls); a second,
+    # overlapping drain would have consumed more of the scripted queue and
+    # raised AssertionError from the fake instead.
+    assert fake_connection.commands.call_count("get_msg") == 3
 
 
 def test_logs_rx_follow_prints_raw_payloads(runner, configured_store, fake_connection, monkeypatch):

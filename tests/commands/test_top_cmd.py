@@ -25,6 +25,10 @@ def test_top_contact_instant_reading(runner, configured_store, fake_connection):
     assert result.exit_code == 0, result.output
     assert "temperature" in result.output
     assert "21.5" in result.output
+    # Contact resolution + the telemetry fetch must share one connection --
+    # live hardware testing found this opening two ("Serial Connection
+    # started" logged twice for one invocation).
+    assert fake_connection.connect_call_count == 1
 
 
 def test_top_contact_history(runner, configured_store, fake_connection):
@@ -37,6 +41,7 @@ def test_top_contact_history(runner, configured_store, fake_connection):
     assert "15" in result.output
     call = fake_connection.commands.calls[-1]
     assert call[0] == "req_mma_sync"
+    assert fake_connection.connect_call_count == 1
 
 
 def test_top_contact_history_rejects_bad_since(runner, configured_store, fake_connection):

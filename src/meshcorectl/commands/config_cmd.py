@@ -12,7 +12,7 @@ import click
 import yaml
 
 from ..context_store import ConnectionSpec, ContextNotFoundError
-from ..output import OutputFormat
+from ..output import OutputFormat, output_option, resolve_output
 from ..output.table import format_table
 
 
@@ -174,11 +174,13 @@ def delete_context(state, name: str) -> None:
 
 
 @config_group.command("view")
+@output_option
 @click.pass_obj
-def view(state) -> None:
+def view(state, output_override: str | None) -> None:
     """Print the full contents of the config file."""
     cfg = state.store.load()
-    if state.output is OutputFormat.JSON:
+    fmt = resolve_output(state.output, output_override)
+    if fmt is OutputFormat.JSON:
         click.echo(json.dumps(cfg.to_dict(), indent=2))
     else:
         click.echo(yaml.safe_dump(cfg.to_dict(), sort_keys=False), nl=False)

@@ -10,7 +10,7 @@ import click
 from ..connect import MeshCoreConnection
 from ..durations import parse_duration
 from ..mesh_data import fetch_contacts, fetch_telemetry, fetch_telemetry_history, find_contact
-from ..output import render
+from ..output import output_option, render, resolve_output
 
 
 @click.group(name="top")
@@ -33,14 +33,13 @@ def top_group() -> None:
     metavar="DURATION",
     help="History window for --history, e.g. 30m, 2h, 1d.",
 )
+@output_option
 @click.pass_obj
-def top_contact(state: Any, name: str, history: bool, since_text: str) -> None:
+def top_contact(
+    state: Any, name: str, history: bool, since_text: str, output_override: str | None
+) -> None:
     """Request telemetry from a contact (typically a sensor)."""
-    contacts = state.call(fetch_contacts)
-    contact = find_contact(contacts, name)
-    if contact is None:
-        raise click.ClickException(f"no contact matching {name!r}")
-
+    start = end = 0
     if history:
         try:
             duration = parse_duration(since_text)
@@ -49,20 +48,24 @@ def top_contact(state: Any, name: str, history: bool, since_text: str) -> None:
         end = int(time.time())
         start = end - int(duration)
 
-        async def fetch_history(connection: MeshCoreConnection) -> list[dict[str, Any]]:
+    # Contact resolution and the telemetry fetch itself are done inside one
+    # connection (found doubled up -- two separate "Serial Connection
+    # started" round trips for one command -- during live hardware testing)
+    # rather than as two separate state.call()s, matching how
+    # send/delete/exec/login already resolve + act in a single connection.
+    async def run(connection: MeshCoreConnection) -> list[dict[str, Any]]:
+        contacts = await fetch_contacts(connection)
+        contact = find_contact(contacts, name)
+        if contact is None:
+            raise click.ClickException(f"no contact matching {name!r}")
+        if history:
             return await fetch_telemetry_history(connection, contact, start=start, end=end)
+        return await fetch_telemetry(connection, contact)
 
-        readings = state.call(fetch_history)
-        kind = "telemetry-history"
-    else:
-
-        async def fetch_instant(connection: MeshCoreConnection) -> list[dict[str, Any]]:
-            return await fetch_telemetry(connection, contact)
-
-        readings = state.call(fetch_instant)
-        kind = "telemetry"
+    readings = state.call(run)
+    kind = "telemetry-history" if history else "telemetry"
 
     if not readings:
         click.echo("No telemetry readings.", err=True)
         return
-    click.echo(render(readings, state.output, kind=kind))
+    click.echo(render(readings, resolve_output(state.output, output_override), kind=kind))

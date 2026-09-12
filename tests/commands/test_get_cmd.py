@@ -42,6 +42,26 @@ def test_get_device_json(runner, configured_store, fake_connection):
     assert json.loads(result.output)["model"] == "T114"
 
 
+def test_get_device_json_output_flag_after_subcommand(runner, configured_store, fake_connection):
+    """-o after the subcommand (kubectl's usual `get pods -o json` order),
+    found broken (had to precede the subcommand) during live hardware testing."""
+    fake_connection.commands.script(
+        "send_device_query", Event(EventType.DEVICE_INFO, {"fw ver": 14, "model": "T114"})
+    )
+    result = invoke(runner, configured_store, "get", "device", "-o", "json")
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["model"] == "T114"
+
+
+def test_get_device_local_output_overrides_global(runner, configured_store, fake_connection):
+    fake_connection.commands.script(
+        "send_device_query", Event(EventType.DEVICE_INFO, {"fw ver": 14, "model": "T114"})
+    )
+    result = invoke(runner, configured_store, "-o", "yaml", "get", "device", "-o", "json")
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["model"] == "T114"
+
+
 def test_get_device_error_becomes_click_exception(runner, configured_store, fake_connection):
     fake_connection.commands.script("send_device_query", Event(EventType.ERROR, {"reason": "nope"}))
     result = invoke(runner, configured_store, "get", "device")
@@ -67,6 +87,27 @@ def test_get_contacts_empty_prints_hint(runner, configured_store, fake_connectio
     result = invoke(runner, configured_store, "get", "contacts")
     assert result.exit_code == 0
     assert "No contacts" in result.output
+
+
+def test_get_contacts_selector_filters(runner, configured_store, fake_connection):
+    script_contacts(fake_connection)
+    result = invoke(runner, configured_store, "get", "contacts", "-l", "t=repeater")
+    assert result.exit_code == 0, result.output
+    assert "bob" in result.output
+    assert "alice" not in result.output
+
+
+def test_get_contacts_selector_matches_none(runner, configured_store, fake_connection):
+    script_contacts(fake_connection)
+    result = invoke(runner, configured_store, "get", "contacts", "-l", "t=sensor")
+    assert result.exit_code == 0
+    assert "No contacts" in result.output
+
+
+def test_get_contacts_bad_selector_errors(runner, configured_store, fake_connection):
+    script_contacts(fake_connection)
+    result = invoke(runner, configured_store, "get", "contacts", "-l", "bogus")
+    assert result.exit_code != 0
 
 
 def test_get_contact_by_name(runner, configured_store, fake_connection):

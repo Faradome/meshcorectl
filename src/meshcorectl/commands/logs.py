@@ -22,7 +22,7 @@ from meshcore import EventType
 from ..connect import MeshCoreConnection
 from ..durations import parse_duration
 from ..mesh_data import drain_messages, fetch_channels, fetch_contacts, normalize_message
-from ..output import OutputFormat
+from ..output import OutputFormat, output_option, resolve_output
 
 
 async def wait_until_interrupted() -> None:
@@ -61,8 +61,15 @@ def format_message_line(message: dict[str, Any], fmt: OutputFormat) -> str:
     is_flag=True,
     help="Follow the raw rx-log packet stream instead of messages (requires --follow).",
 )
+@output_option
 @click.pass_obj
-def logs_command(state: Any, follow: bool, since_text: str | None, raw_rx: bool) -> None:
+def logs_command(
+    state: Any,
+    follow: bool,
+    since_text: str | None,
+    raw_rx: bool,
+    output_override: str | None,
+) -> None:
     """Show messages received by the device."""
     if raw_rx and not follow:
         raise click.ClickException("--rx has no effect without --follow")
@@ -73,6 +80,8 @@ def logs_command(state: Any, follow: bool, since_text: str | None, raw_rx: bool)
             since_seconds = parse_duration(since_text)
         except ValueError as exc:
             raise click.ClickException(str(exc)) from exc
+
+    fmt = resolve_output(state.output, output_override)
 
     async def run(connection: MeshCoreConnection) -> None:
         if raw_rx:
@@ -87,21 +96,37 @@ def logs_command(state: Any, follow: bool, since_text: str | None, raw_rx: bool)
         channels = await fetch_channels(connection)
         cutoff = time.time() - since_seconds if since_seconds is not None else None
 
-        for raw in await drain_messages(connection):
+        def show(raw: dict[str, Any]) -> None:
             timestamp = raw.get("sender_timestamp")
             if cutoff is not None and timestamp is not None and timestamp < cutoff:
-                continue
+                return
             message = normalize_message(raw, contacts=contacts, channels=channels)
-            click.echo(format_message_line(message, state.output))
+            click.echo(format_message_line(message, fmt))
+
+        for raw in await drain_messages(connection):
+            show(raw)
 
         if follow:
+            # `CONTACT_MSG_RECV`/`CHANNEL_MSG_RECV` are not passively pushed
+            # events -- confirmed on real hardware that subscribing to them
+            # directly never fires, because they only arise as a side
+            # effect of an explicit `commands.get_msg()` call (normally
+            # triggered by a MESSAGES_WAITING push). So: subscribe to
+            # MESSAGES_WAITING and drain again -- via the same
+            # `drain_messages()` used for the initial batch -- whenever it
+            # fires, instead of waiting on events that never come.
+            fetch_task: asyncio.Task[None] | None = None
 
-            def handle(event: Any) -> None:
-                message = normalize_message(event.payload, contacts=contacts, channels=channels)
-                click.echo(format_message_line(message, state.output))
+            async def drain_new_messages() -> None:
+                for raw in await drain_messages(connection):
+                    show(raw)
 
-            connection.subscribe(EventType.CONTACT_MSG_RECV, handle)
-            connection.subscribe(EventType.CHANNEL_MSG_RECV, handle)
+            def handle_messages_waiting(_event: Any) -> None:
+                nonlocal fetch_task
+                if fetch_task is None or fetch_task.done():
+                    fetch_task = asyncio.create_task(drain_new_messages())
+
+            connection.subscribe(EventType.MESSAGES_WAITING, handle_messages_waiting)
             await wait_until_interrupted()
 
     state.call(run)

@@ -9,7 +9,7 @@ import click
 
 from ..connect import MeshCoreConnection
 from ..mesh_data import DEVICE_PARAMS, set_device_param
-from ..output import render_result
+from ..output import output_option, render_result, resolve_output
 
 
 @click.group(name="set")
@@ -21,8 +21,11 @@ def set_group() -> None:
 @click.argument("param", metavar="PARAM")
 @click.argument("value", metavar="VALUE")
 @click.option("--dry-run", is_flag=True, help="Show what would be set without setting it.")
+@output_option
 @click.pass_obj
-def set_device_command(state: Any, param: str, value: str, dry_run: bool) -> None:
+def set_device_command(
+    state: Any, param: str, value: str, dry_run: bool, output_override: str | None
+) -> None:
     """Set device parameter PARAM to VALUE.
 
     \b
@@ -41,7 +44,8 @@ def set_device_command(state: Any, param: str, value: str, dry_run: bool) -> Non
 
     state.call(run)
     text = f"{param} set to {value!r}"
-    click.echo(render_result({"param": param, "value": value}, state.output, text))
+    fmt = resolve_output(state.output, output_override)
+    click.echo(render_result({"param": param, "value": value}, fmt, text))
 
 
 # Click captures `help` from the docstring at decoration time, so the
