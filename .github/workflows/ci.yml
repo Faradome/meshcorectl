@@ -35,3 +35,32 @@ jobs:
 
       - name: Build wheel + sdist
         run: python -m build
+
+  publish:
+    name: Publish to PyPI
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/meshcorectl
+    permissions:
+      id-token: write # required for PyPI trusted publishing (OIDC)
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build wheel + sdist
+        run: |
+          pip install build
+          python -m build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # A push to main whose version wasn't bumped would otherwise fail
+          # the workflow trying to re-upload an existing release.
+          skip-existing: true
