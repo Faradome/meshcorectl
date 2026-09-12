@@ -1,0 +1,27 @@
+#!/bin/sh
+# Carried over unchanged from the original meshcore-cli's
+# scripts/ask_mepo_coords (MIT-licensed, by the meshcore-cli project) --
+# it never depended on that tool's interactive redirection DSL, only the
+# *consumption* pattern changes under meshcorectl:
+#
+#   ./ask_mepo_coords            # opens mepo, waits for a long-click
+#   lat=$(./ask_mepo_coords lat keep)
+#   lon=$(./ask_mepo_coords lon keep)
+#   meshcorectl set device coords "$lat,$lon"
+#
+# don't run mepo if keep parameter is given (use last request)
+# permit to run subsequent query
+if [ "$#" -ge 1 ] && [ "keep" = "$1" ]; then
+	shift
+else
+	# run mepo binding long click (/press) to output position in /tmp/coords
+	echo '[{"cmd": "bind_click", "args": { "button": 1, "clicks": -1, "exps": [{"cmd": "shellpipe_sync", "args": {"shellcode": "echo $MEPO_CURSOR_LAT,$MEPO_CURSOR_LON > /tmp/coords"}},{"cmd": "quit", "args": {}}]}}]'|mepo -i 2> /dev/null
+fi
+
+if [ "$#" -ge 1 ] && [ "lat" = "$1" ]; then
+	sed -e "s/,.*$//" /tmp/coords
+elif [ "$#" -ge 1 ] && [ "lon" = "$1" ]; then
+	sed -e "s/^.*,//" /tmp/coords
+else
+	cat /tmp/coords
+fi

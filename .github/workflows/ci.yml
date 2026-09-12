@@ -28,4 +28,10 @@ jobs:
         run: mypy
 
       - name: Test with coverage gate
+        # Also enforces docs/command-reference.md staying in sync with the
+        # real CLI (tests/unit/test_command_reference.py regenerates it in
+        # memory and diffs against what's committed).
         run: pytest
+
+      - name: Build wheel + sdist
+        run: python -m build

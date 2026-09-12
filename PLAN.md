@@ -22,7 +22,18 @@ Working name for the new binary: **`meshcorectl`** (see [Decision 5](#decision-5
   deliberate deviation from this doc's original command-tree sketch: no
   `delete pending-contacts` — see the note under §3.
   `--dry-run` on every mutating command, per §2's idiom table.
-- **Phase 4 (polish) and beyond: not started.**
+- **Phase 4 (polish): done.** `completion` (bash/zsh/fish, via Click's own
+  shell-completion machinery), `docs/command-reference.md` (generated from
+  `--help`, and kept honest by a test that regenerates it in memory and
+  diffs against what's committed), `docs/migration-from-meshcli.md` (full
+  old→new command mapping, plus `scripts/examples/` — the original tool's
+  example scripts ported where their logic didn't depend on the dropped
+  interactive DSL, and left unported with an explicit note where it did),
+  and a verified-buildable package (wheel + sdist built and smoke-installed
+  into a clean venv; actually publishing to PyPI is left for you to decide
+  and do, since it's a one-way, externally-visible action).
+- **Phase 5 (optional): `meshcored` background agent — not started.** The
+  only phase left in this doc; see Decision 1.
 
 ## 0. Scope & assumptions
 

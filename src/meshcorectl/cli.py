@@ -22,6 +22,7 @@ import click
 
 from . import __version__, resource_specs  # noqa: F401 - import registers resource specs
 from .commands.advert import advert_command
+from .commands.completion import completion_command
 from .commands.config_cmd import config_group
 from .commands.create import create_group
 from .commands.delete import delete_group
@@ -223,6 +224,7 @@ cli.add_command(reboot_command)
 cli.add_command(set_group)
 cli.add_command(scan_command)
 cli.add_command(version_command)
+cli.add_command(completion_command)
 
 
 def main() -> None:
