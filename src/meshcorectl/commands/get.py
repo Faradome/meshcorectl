@@ -77,13 +77,32 @@ def get_contact(state: Any, name: str, output_override: str | None) -> None:
 
 
 @get_group.command("channels")
+@click.option(
+    "-A",
+    "--all",
+    "show_all",
+    is_flag=True,
+    default=False,
+    help="Include empty (unconfigured) channel slots.",
+)
 @output_option
 @click.pass_obj
-def get_channels(state: Any, output_override: str | None) -> None:
-    """List every configured channel."""
+def get_channels(state: Any, show_all: bool, output_override: str | None) -> None:
+    """List every configured channel.
+
+    A device reserves a fixed number of channel slots (commonly 40) whether
+    or not they're in use; empty slots are hidden by default -- same as
+    `send channel`/`delete channel`, which never treat one as a valid
+    target. Pass --all to include them too, in every output format.
+    """
     channels = state.call(fetch_channels)
+    if not show_all:
+        channels = [c for c in channels if c["name"]]
     if not channels:
-        click.echo("No channels configured.", err=True)
+        hint = "No channels configured."
+        if not show_all:
+            hint += " (pass --all to include empty slots)"
+        click.echo(hint, err=True)
         return
     click.echo(render(channels, resolve_output(state.output, output_override), kind="channel"))
 

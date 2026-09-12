@@ -14,7 +14,7 @@ pyserial) any earlier than `meshcore` itself already does.
 
 from __future__ import annotations
 
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol, cast, runtime_checkable
 
 from .context_store import ConnectionSpec
 
@@ -59,14 +59,24 @@ async def connect(
                 address=spec.address, debug=debug, default_timeout=timeout
             )
         elif spec.kind == "serial":
+            # ConnectionSpec.__post_init__ guarantees 'port' is set when kind == "serial";
+            # the assert just narrows the type for static checkers.
+            assert spec.port is not None
             client = await MeshCore.create_serial(
                 port=spec.port, baudrate=spec.baudrate, debug=debug, default_timeout=timeout
             )
         else:  # tcp — ConnectionSpec.__post_init__ guarantees kind is one of the three
+            # ...and that 'host' is set when kind == "tcp"; same narrowing as above.
+            assert spec.host is not None
             client = await MeshCore.create_tcp(
                 host=spec.host, port=spec.tcp_port, debug=debug, default_timeout=timeout
             )
     except Exception as exc:
         raise ConnectError(f"failed to connect ({spec.summary()}): {exc}") from exc
 
-    return client
+    # `meshcore.MeshCore` structurally satisfies `MeshCoreConnection` (that's the whole
+    # point of the protocol), but its `self_info` is a property and `subscribe()` has a
+    # wider signature than the narrow surface this protocol intentionally exposes to
+    # command modules -- both of which read as real mismatches to a structural type
+    # checker. Cast rather than loosen the protocol.
+    return cast(MeshCoreConnection, client)

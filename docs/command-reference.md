@@ -415,7 +415,13 @@ Usage: meshcorectl get channels [OPTIONS]
 
   List every configured channel.
 
+  A device reserves a fixed number of channel slots (commonly 40) whether or
+  not they're in use; empty slots are hidden by default -- same as `send
+  channel`/`delete channel`, which never treat one as a valid target. Pass
+  --all to include them too, in every output format.
+
 Options:
+  -A, --all            Include empty (unconfigured) channel slots.
   -o, --output FORMAT  Output format for this command
                        (table|wide|json|yaml|name); overrides the global -o.
   --help               Show this message and exit.

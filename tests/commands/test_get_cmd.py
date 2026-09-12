@@ -160,6 +160,64 @@ def test_get_channels_empty_prints_hint(runner, configured_store, fake_connectio
     assert "No channels" in result.output
 
 
+def script_channels_with_empty_slot(fake_connection):
+    public = {"channel_idx": 0, "channel_name": "public", "channel_secret": b"\x00"}
+    empty = {"channel_idx": 1, "channel_name": "", "channel_secret": b"\x00"}
+    fdl = {"channel_idx": 2, "channel_name": "#fdl", "channel_secret": b"\x01"}
+    fake_connection.commands.script(
+        "get_channel",
+        Event(EventType.CHANNEL_INFO, public),
+        Event(EventType.CHANNEL_INFO, empty),
+        Event(EventType.CHANNEL_INFO, fdl),
+        Event(EventType.ERROR, {"reason": "no such channel"}),
+    )
+
+
+def test_get_channels_hides_empty_slots_by_default(runner, configured_store, fake_connection):
+    script_channels_with_empty_slot(fake_connection)
+    result = invoke(runner, configured_store, "get", "channels")
+    assert result.exit_code == 0, result.output
+    lines = [ln for ln in result.output.splitlines() if ln.strip()]
+    assert len(lines) == 3  # header + public + #fdl, empty slot 1 excluded
+    assert "public" in result.output
+    assert "#fdl" in result.output
+
+
+def test_get_channels_all_includes_empty_slots(runner, configured_store, fake_connection):
+    script_channels_with_empty_slot(fake_connection)
+    result = invoke(runner, configured_store, "get", "channels", "--all")
+    assert result.exit_code == 0, result.output
+    lines = [ln for ln in result.output.splitlines() if ln.strip()]
+    assert len(lines) == 4  # header + all 3 slots, including the empty one
+
+
+def test_get_channels_json_hides_empty_slots_by_default(runner, configured_store, fake_connection):
+    script_channels_with_empty_slot(fake_connection)
+    result = invoke(runner, configured_store, "-o", "json", "get", "channels")
+    assert result.exit_code == 0, result.output
+    parsed = json.loads(result.output)
+    assert len(parsed) == 2
+    assert all(c["name"] for c in parsed)
+
+
+def test_get_channels_json_all_includes_empty_slots(runner, configured_store, fake_connection):
+    script_channels_with_empty_slot(fake_connection)
+    result = invoke(runner, configured_store, "-o", "json", "get", "channels", "--all")
+    assert result.exit_code == 0, result.output
+    parsed = json.loads(result.output)
+    assert len(parsed) == 3
+    assert any(c["name"] == "" for c in parsed)
+
+
+def test_get_channels_all_empty_still_prints_hint(runner, configured_store, fake_connection):
+    fake_connection.commands.script("get_channel", Event(EventType.ERROR, {"reason": "none"}))
+    result = invoke(runner, configured_store, "get", "channels", "--all")
+    assert result.exit_code == 0
+    assert "No channels" in result.output
+    # --all was already given, so the "pass --all" hint would be redundant/wrong
+    assert "pass --all" not in result.output
+
+
 def test_get_channel_by_index(runner, configured_store, fake_connection):
     script_channels(fake_connection)
     result = invoke(runner, configured_store, "get", "channel", "1")
