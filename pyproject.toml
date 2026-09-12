@@ -39,8 +39,8 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/meshcore-dev/meshcorectl"
-Issues = "https://github.com/meshcore-dev/meshcorectl/issues"
+Homepage = "https://github.com/Faradome/meshcorectl"
+Issues = "https://github.com/Faradome/meshcorectl/issues"
 
 [project.scripts]
 meshcorectl = "meshcorectl.cli:main"
