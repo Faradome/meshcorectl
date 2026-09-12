@@ -246,8 +246,11 @@ Usage: meshcorectl create channel [OPTIONS] INDEX NAME [KEY]
 
   Define channel INDEX with NAME and optional 32-hex-char KEY.
 
-  When KEY is omitted, the device derives it from NAME (only works when NAME
-  starts with '#').
+  When KEY is omitted: a '#'-prefixed NAME is the public-channel convention,
+  so the device derives the same secret from NAME itself -- anyone who knows
+  the name can compute it and join. For any other NAME, meshcorectl generates
+  a random secret for you (a name-derived secret would make a "private"
+  channel just as guessable as a public one).
 
 Options:
   --dry-run            Show what would be created without doing it.

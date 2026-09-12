@@ -57,10 +57,41 @@ def test_create_channel_without_key(runner, configured_store, fake_connection):
     assert fake_connection.commands.calls[0] == ("set_channel", (3, "#fdl", None), {})
 
 
+def test_create_channel_without_key_non_hash_name_generates_and_reports_secret(
+    runner, configured_store, fake_connection
+):
+    fake_connection.commands.script("set_channel", Event(EventType.OK, {}))
+    confirmed = {"channel_idx": 3, "channel_name": "private", "channel_secret": b"\xaa" * 16}
+    fake_connection.commands.script("get_channel", Event(EventType.CHANNEL_INFO, confirmed))
+    result = invoke(runner, configured_store, "create", "channel", "3", "private")
+    assert result.exit_code == 0, result.output
+    method, args, kwargs = fake_connection.commands.calls[0]
+    assert method == "set_channel"
+    secret = args[2]
+    assert isinstance(secret, bytes) and len(secret) == 16
+    assert secret != bytes(16)  # a real random draw, not a placeholder
+    assert "Generated channel secret:" in result.output
+    # the printed value is what the device confirmed back (get_channel's
+    # scripted readback), not the transient bytes sent in the set_channel call
+    assert ("aa" * 16) in result.output
+
+
 def test_create_channel_dry_run(runner, store):
     result = invoke(runner, store, "create", "channel", "3", "#fdl", "--dry-run")
     assert result.exit_code == 0, result.output
     assert "would create channel 3" in result.output
+
+
+def test_create_channel_dry_run_non_hash_name_notes_auto_generation(runner, store):
+    result = invoke(runner, store, "create", "channel", "3", "private", "--dry-run")
+    assert result.exit_code == 0, result.output
+    assert "auto-generating a random secret" in result.output
+
+
+def test_create_channel_dry_run_with_explicit_key_does_not_mention_generation(runner, store):
+    result = invoke(runner, store, "create", "channel", "3", "private", "01" * 16, "--dry-run")
+    assert result.exit_code == 0, result.output
+    assert "auto-generating" not in result.output
 
 
 def test_create_channel_error(runner, configured_store, fake_connection):

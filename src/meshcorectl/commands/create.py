@@ -44,15 +44,22 @@ def create_channel_command(
 ) -> None:
     """Define channel INDEX with NAME and optional 32-hex-char KEY.
 
-    When KEY is omitted, the device derives it from NAME (only works when
-    NAME starts with '#').
+    When KEY is omitted: a '#'-prefixed NAME is the public-channel convention,
+    so the device derives the same secret from NAME itself -- anyone who knows
+    the name can compute it and join. For any other NAME, meshcorectl generates
+    a random secret for you (a name-derived secret would make a "private"
+    channel just as guessable as a public one).
     """
+    generating = key is None and not name.startswith("#")
     if dry_run:
-        click.echo(f"would create channel {index} named {name!r} (dry run)")
+        suffix = " (auto-generating a random secret)" if generating else ""
+        click.echo(f"would create channel {index} named {name!r}{suffix} (dry run)")
         return
 
     async def run(connection: MeshCoreConnection) -> dict[str, Any]:
         return await create_channel(connection, index, name, key)
 
     channel = state.call(run)
+    if generating:
+        click.echo(f"Generated channel secret: {channel['secret']}", err=True)
     click.echo(render(channel, resolve_output(state.output, output_override), kind="channel"))

@@ -14,6 +14,7 @@ notes for the exact call sites, since there's no protocol spec to cite.
 from __future__ import annotations
 
 import datetime
+import secrets
 from collections.abc import Callable
 from typing import Any
 
@@ -242,11 +243,19 @@ async def remove_contact(connection: MeshCoreConnection, contact: dict[str, Any]
 async def create_channel(
     connection: MeshCoreConnection, index: int, name: str, secret_hex: str | None
 ) -> dict[str, Any]:
-    """`secret_hex`, if given, must be 32 hex chars (16 bytes); when omitted
-    the device derives the secret from `name` itself (only if `name`
-    starts with '#') -- both handled by `commands.set_channel` already, not
-    reimplemented here."""
-    secret = None
+    """`secret_hex`, if given, must be 32 hex chars (16 bytes).
+
+    When omitted, what happens depends on `name`:
+    - A `#`-prefixed name is the public-channel convention: `commands.set_channel`
+      derives the secret deterministically from the name itself, so anyone who
+      knows the name can compute the same key and join. Left as `None` here so
+      the library does exactly that (not reimplemented).
+    - Any other name is meant to be a private channel, so meshcorectl generates
+      a random 16-byte secret itself here -- letting `set_channel` fall back to
+      its own name-derived secret in that case would silently make the "private"
+      channel just as guessable as a public one.
+    """
+    secret: bytes | None
     if secret_hex is not None:
         if len(secret_hex) != 32:
             raise MeshDataError("channel secret must be exactly 32 hex characters (16 bytes)")
@@ -254,6 +263,10 @@ async def create_channel(
             secret = bytes.fromhex(secret_hex)
         except ValueError as exc:
             raise MeshDataError(f"invalid hex in channel secret: {exc}") from exc
+    elif name.startswith("#"):
+        secret = None
+    else:
+        secret = secrets.token_bytes(16)
     _check(await connection.commands.set_channel(index, name, secret), "setting channel")
     confirmed = _check(await connection.commands.get_channel(index), "reading back the channel")
     return normalize_channel(confirmed.payload)

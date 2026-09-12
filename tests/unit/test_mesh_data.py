@@ -471,6 +471,39 @@ async def test_create_channel_rejects_bad_hex_secret():
         await create_channel(fake, 3, "#fdl", "zz" * 16)
 
 
+async def test_create_channel_without_secret_generates_random_key_for_non_hash_name():
+    """Only a '#'-prefixed name is the public/derived-key convention -- any
+    other name is meant to be private, so letting set_channel's own
+    name-derived fallback run (as for '#fdl' above) would make it just as
+    guessable as a public channel. meshcorectl must generate a real random
+    secret itself instead of passing secret=None through."""
+    fake = FakeMeshCore()
+    fake.commands.script("set_channel", Event(EventType.OK, {}))
+    confirmed = {"channel_idx": 3, "channel_name": "private", "channel_secret": b"\xaa" * 16}
+    fake.commands.script("get_channel", Event(EventType.CHANNEL_INFO, confirmed))
+    await create_channel(fake, 3, "private", None)
+    method, args, kwargs = fake.commands.calls[0]
+    assert method == "set_channel"
+    _, name, secret = args
+    assert name == "private"
+    assert isinstance(secret, bytes)
+    assert len(secret) == 16
+    assert secret != bytes(16)  # a real random draw, not an all-zero placeholder
+
+
+async def test_create_channel_without_secret_generates_a_different_key_each_call():
+    fake = FakeMeshCore()
+    confirmed = {"channel_idx": 3, "channel_name": "private", "channel_secret": b"\x00"}
+    generated = []
+    for _ in range(2):
+        fake.commands.script("set_channel", Event(EventType.OK, {}))
+        fake.commands.script("get_channel", Event(EventType.CHANNEL_INFO, confirmed))
+        await create_channel(fake, 3, "private", None)
+        # calls == [..., ("set_channel", (3, "private", secret), {}), ("get_channel", (3,), {})]
+        generated.append(fake.commands.calls[-2][1][2])
+    assert generated[0] != generated[1]
+
+
 async def test_create_channel_raises_on_set_error():
     fake = FakeMeshCore()
     fake.commands.script("set_channel", Event(EventType.ERROR, {"reason": "full"}))
