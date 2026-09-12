@@ -64,7 +64,9 @@ Options:
   --timeout SECONDS               Per-command timeout (overrides the
                                   context/config default).
   -v, --verbose                   Increase logging verbosity (-v for info, -vv
-                                  for debug).
+                                  for debug). Login passwords, device PINs,
+                                  and message text are kept out of the debug
+                                  log.
   --config PATH                   Path to the meshcorectl config file
                                   (default:
                                   ~/.config/meshcorectl/config.yaml).

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 import pytest
 from click.testing import CliRunner
 
@@ -44,6 +46,21 @@ def fake_connection(monkeypatch):
 
     monkeypatch.setattr("meshcorectl.cli.connect", fake_connect)
     return fake
+
+
+@pytest.fixture
+def meshcore_logger_at_debug():
+    """Puts the upstream `meshcore` logger at DEBUG, as `meshcorectl -vv`
+    would, for tests checking that secret-bearing calls (see
+    `logging_utils.redact_secrets`) suppress it regardless. Restores
+    whatever level the logger had before once the test is done."""
+    logger = logging.getLogger("meshcore")
+    original = logger.level
+    logger.setLevel(logging.DEBUG)
+    try:
+        yield logger
+    finally:
+        logger.setLevel(original)
 
 
 def invoke(runner, store, *args):
