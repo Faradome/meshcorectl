@@ -8,13 +8,13 @@ A non-interactive, kubectl-style CLI for MeshCore companion radios:
 `meshcorectl VERB [TYPE] [NAME] [flags]`, named connection contexts (BLE/serial/TCP), and
 `-o table|json|yaml|wide|name` output on every read command.
 
-For design rationale and architecture, see [PLAN.md](PLAN.md).
-
 ## Install
 
 ```bash
-pip install -e ".[dev]"    # from a checkout, until this is published
+pip install meshcorectl
 ```
+
+For a development checkout instead, see [Development](#development) below.
 
 ## Quickstart
 
@@ -38,8 +38,9 @@ meshcorectl delete contact -l 't=client,u>30d'   # -l selectors batch across mat
 source <(meshcorectl completion bash)   # or zsh / fish
 ```
 
-Every command has real `--help` text; [docs/command-reference.md](docs/command-reference.md) is
-the same text generated into one file. Nothing here is interactive — no REPL, no prompts on the
+Every command has real `--help` text;
+[docs/command-reference.md](https://github.com/Faradome/meshcorectl/blob/main/docs/command-reference.md)
+is the same text generated into one file. Nothing here is interactive — no REPL, no prompts on the
 happy path (an exception: `login` without `--password`/`--password-stdin` prompts securely for
 one, the same as `ssh` or `git`) — every command is a single invocation that connects, does one
 thing, and exits, which is what makes it scriptable.
@@ -70,5 +71,4 @@ A test (`tests/unit/test_command_reference.py`) fails if it's out of date.
 
 ## License
 
-[MIT](LICENSE) — same license as the original
-[meshcore-cli](https://github.com/meshcore-dev/meshcore-cli).
+[MIT](https://github.com/Faradome/meshcorectl/blob/main/LICENSE)
