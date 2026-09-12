@@ -1,5 +1,9 @@
 # meshcorectl
 
+> **This is an AI-generated application.** The design, code, tests, and documentation in this
+> repository were produced by an AI coding agent (Claude), directed and reviewed by a human
+> maintainer. See [PLAN.md](PLAN.md) for the design rationale and delivery history.
+
 A ground-up, non-interactive rewrite of
 [meshcore-cli](https://github.com/meshcore-dev/meshcore-cli), modeled on `kubectl`'s
 command/argument structure instead of that tool's REPL-and-argument-chain style:
@@ -70,3 +74,8 @@ python3 scripts/generate_command_reference.py
 ```
 
 A test (`tests/unit/test_command_reference.py`) fails if it's out of date.
+
+## License
+
+[MIT](LICENSE) — same license as the original
+[meshcore-cli](https://github.com/meshcore-dev/meshcore-cli).
