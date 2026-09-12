@@ -1,11 +1,8 @@
 """A hardware-free double for `meshcore.MeshCore`, used by every command test.
 
 Command modules only ever see the `connect.MeshCoreConnection` protocol
-(`.commands`, `.self_info`, `.subscribe`, `.disconnect`) — see
-`meshcorectl/connect.py` and PLAN.md Decision 1 — so `FakeMeshCore` below
-satisfies that shape without touching BLE, serial, or TCP. Built in Phase 1
-(PLAN.md §8) so every read/write command from Phase 2 onward is written
-test-first against it.
+(`.commands`, `.self_info`, `.subscribe`, `.disconnect`), so `FakeMeshCore`
+below satisfies that shape without touching BLE, serial, or TCP.
 
 Real `meshcore.events.Event`/`EventType` objects are used for scripted
 results (they're plain dataclasses/enums with no I/O), so assertions in

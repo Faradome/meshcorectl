@@ -68,10 +68,10 @@ exclude_lines = [
 line-length = 100
 target-version = "py310"
 # scripts/examples/ are carried over verbatim from the original meshcore-cli
-# project (see docs/migration-from-meshcli.md) -- e.g. getpos.py's
-# `gi.require_version(...)` must precede its `from gi.repository import ...`,
-# which is a real PyGObject requirement ruff's import-sort would "fix" into
-# broken code. They're reference material, not part of this package.
+# project -- e.g. getpos.py's `gi.require_version(...)` must precede its
+# `from gi.repository import ...`, a real PyGObject requirement ruff's
+# import-sort would "fix" into broken code. Reference material, not part
+# of this package.
 extend-exclude = ["scripts/examples"]
 
 [tool.ruff.lint]

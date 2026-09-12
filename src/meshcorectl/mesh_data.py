@@ -2,13 +2,11 @@
 `get`/`describe`/`top` commands hand to `output.render()`.
 
 No Click here: every function takes a `MeshCoreConnection` and is unit
-tested directly against `tests/fakes/meshcore_double.py`
-(`tests/unit/test_mesh_data.py`), independent of any command wiring.
+tested directly, independent of any command wiring.
 
-Field names below (contact/channel/device-info/telemetry keys) come
-straight from reading the `meshcore` library's wire-format parser
-(`reader.py`) and command modules, not guesswork — see the Phase 2 session
-notes for the exact call sites, since there's no protocol spec to cite.
+Field names below (contact/channel/device-info/telemetry keys) come from
+the `meshcore` library's wire-format parser and command modules; there is
+no protocol spec to cite.
 """
 
 from __future__ import annotations
@@ -123,8 +121,7 @@ def find_channel(channels: list[dict[str, Any]], index_or_name: str) -> dict[str
 
 async def fetch_channels(connection: MeshCoreConnection) -> list[dict[str, Any]]:
     """Probe channel slots 0, 1, 2, ... until the device returns an error --
-    there's no "how many channels are set" query, so this mirrors the
-    original tool's own approach."""
+    there's no "how many channels are set" query."""
     channels: list[dict[str, Any]] = []
     index = 0
     while True:
@@ -185,8 +182,7 @@ def normalize_message(
 ) -> dict[str, Any]:
     """Resolve a raw CONTACT_MSG_RECV/CHANNEL_MSG_RECV payload's sender to a
     display name, given the contact/channel lists already fetched this
-    invocation (there's no on-the-fly lookup -- see PLAN.md Decision 1: no
-    persistent cache to consult)."""
+    invocation -- there's no cache to consult otherwise."""
     if raw.get("type") == "CHAN":
         index = raw.get("channel_idx")
         channel = next((c for c in (channels or []) if c.get("index") == index), None)
@@ -212,7 +208,7 @@ def normalize_message(
 
 async def drain_messages(connection: MeshCoreConnection) -> list[dict[str, Any]]:
     """Fetch every currently-queued message, oldest first, stopping at
-    NO_MORE_MSGS. Mirrors the original tool's `sync_msgs`."""
+    NO_MORE_MSGS."""
     messages: list[dict[str, Any]] = []
     while True:
         event = await connection.commands.get_msg()
@@ -223,9 +219,7 @@ async def drain_messages(connection: MeshCoreConnection) -> list[dict[str, Any]]
 
 
 async def import_contact(connection: MeshCoreConnection, uri: str) -> None:
-    """`uri` must be a `meshcore://<hex>` card, same format `get device
-    card`-style export produces (create/export-contact is out of Phase 3's
-    scope; only import is)."""
+    """`uri` must be a `meshcore://<hex>` contact-card URI."""
     prefix = "meshcore://"
     if not uri.startswith(prefix):
         raise MeshDataError(f"not a meshcore contact URI (expected {prefix}...): {uri!r}")
@@ -274,8 +268,7 @@ async def create_channel(
 
 async def delete_channel(connection: MeshCoreConnection, index: int) -> None:
     """There's no dedicated "delete channel" wire command: clearing the
-    name and zeroing the secret (what the original tool's `remove_channel`
-    did) is the convention."""
+    name and zeroing the secret is the convention used instead."""
     _check(await connection.commands.set_channel(index, "", bytes(16)), "clearing channel")
 
 
@@ -304,12 +297,10 @@ async def send_channel_message(
 async def run_repeater_command(
     connection: MeshCoreConnection, contact: dict[str, Any], command: str, *, timeout: float
 ) -> str | None:
-    """Send a raw console command to a repeater/room and wait for its reply.
-
-    Combines the original tool's `cmd` (send) and `wmt8` (wait-for-reply)
-    into one round-trip -- closer to `kubectl exec`'s synchronous
-    "run this, show me the output" shape. Returns the reply text, or None
-    if nothing came back within `timeout`.
+    """Send a raw console command to a repeater/room and wait for its reply
+    in one round-trip (`kubectl exec`'s synchronous "run this, show me the
+    output" shape). Returns the reply text, or None if nothing came back
+    within `timeout`.
     """
     _check(await connection.commands.send_cmd(contact, command), "sending repeater command")
     notified = await connection.wait_for_event(EventType.MESSAGES_WAITING, timeout=timeout)
@@ -337,8 +328,7 @@ async def send_advert(connection: MeshCoreConnection, *, flood: bool) -> None:
 
 
 async def reboot_device(connection: MeshCoreConnection) -> None:
-    """No response is expected -- the device reboots immediately, and the
-    original tool doesn't check this call's result either."""
+    """No response is expected -- the device reboots immediately."""
     await connection.commands.reboot()
 
 
@@ -396,9 +386,8 @@ DEVICE_PARAMS = tuple(sorted(_DEVICE_PARAM_SETTERS))
 
 
 async def set_device_param(connection: MeshCoreConnection, param: str, value: str) -> None:
-    """A deliberately curated subset of the original tool's ~30-parameter
-    `set` command (PLAN.md §4 flags this as an initial useful set, not a
-    full port) -- see `DEVICE_PARAMS` for exactly which ones."""
+    """A curated subset of device parameters; see `DEVICE_PARAMS` for
+    exactly which ones."""
     setter = _DEVICE_PARAM_SETTERS.get(param)
     if setter is None:
         raise MeshDataError(
@@ -419,12 +408,9 @@ async def collect_events(
     sleep: Callable[[float], Any],
 ) -> list[dict[str, Any]]:
     """Subscribe to `event_type` for `duration` seconds and return every
-    payload received in that window.
-
-    Used for the things the original tool could rely on a long-lived
-    session to accumulate (pending contacts) but a one-shot connection
-    (PLAN.md Decision 1) has to actively wait for instead. `sleep` is
-    injected (rather than hardcoding `asyncio.sleep`) so tests can pass a
+    payload received in that window -- for events a one-shot connection has
+    to actively wait for (e.g. pending contacts) rather than read from an
+    already-accumulated cache. `sleep` is injected so tests can pass a
     zero-delay stand-in instead of really waiting.
     """
     collected: list[dict[str, Any]] = []

@@ -2,12 +2,9 @@
 """
 Get the current position (latitude, longitude, accuracy/precision) via GeoClue2.
 
-Carried over unchanged from the original meshcore-cli's scripts/getpos.py
-(MIT-licensed, by the meshcore-cli project) -- it never depended on that
-tool's interactive redirection DSL, only the *consumption* pattern changes
-under meshcorectl. Originally you'd feed its output into an alias via
-`<lat|`/`<lon|` input-pipes; now, plain shell command substitution does the
-same job:
+Unchanged from the original meshcore-cli's scripts/getpos.py (MIT-licensed,
+by the meshcore-cli project). Feed its output to meshcorectl with plain
+shell command substitution:
 
     coords=$(python3 getpos.py)
     lat=$(echo "$coords" | jq -r '.lat')

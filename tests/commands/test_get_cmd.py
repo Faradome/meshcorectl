@@ -43,8 +43,7 @@ def test_get_device_json(runner, configured_store, fake_connection):
 
 
 def test_get_device_json_output_flag_after_subcommand(runner, configured_store, fake_connection):
-    """-o after the subcommand (kubectl's usual `get pods -o json` order),
-    found broken (had to precede the subcommand) during live hardware testing."""
+    """-o after the subcommand, kubectl's usual `get pods -o json` order."""
     fake_connection.commands.script(
         "send_device_query", Event(EventType.DEVICE_INFO, {"fw ver": 14, "model": "T114"})
     )

@@ -1,15 +1,12 @@
-"""Resolves a stored `ConnectionSpec` into a live MeshCore client.
+"""Opens a live connection to a device described by a `ConnectionSpec`.
 
-This is the one seam PLAN.md (Decision 1) reserves for the future
-`meshcored`-backed client: every command module talks only to the
-`MeshCoreConnection` protocol below, never to `meshcore.MeshCore` directly,
-so a daemon-backed implementation can be swapped in later (see `cli.py`'s
-`CliState.connect`) without touching a single command module.
+Command modules depend only on the `MeshCoreConnection` protocol below, not
+on `meshcore.MeshCore` directly, so the connection method can change without
+touching command code.
 
-`meshcore.MeshCore.create_ble/create_serial/create_tcp` are imported lazily
-inside `connect()` rather than at module scope so that unit tests can
-monkeypatch them without importing real transport backends (bleak,
-pyserial) any earlier than `meshcore` itself already does.
+`meshcore.MeshCore.create_ble/create_serial/create_tcp` are imported inside
+`connect()`, not at module scope, so tests can monkeypatch them without
+importing bleak/pyserial.
 """
 
 from __future__ import annotations
@@ -59,24 +56,19 @@ async def connect(
                 address=spec.address, debug=debug, default_timeout=timeout
             )
         elif spec.kind == "serial":
-            # ConnectionSpec.__post_init__ guarantees 'port' is set when kind == "serial";
-            # the assert just narrows the type for static checkers.
-            assert spec.port is not None
+            assert spec.port is not None  # guaranteed by ConnectionSpec.__post_init__
             client = await MeshCore.create_serial(
                 port=spec.port, baudrate=spec.baudrate, debug=debug, default_timeout=timeout
             )
-        else:  # tcp — ConnectionSpec.__post_init__ guarantees kind is one of the three
-            # ...and that 'host' is set when kind == "tcp"; same narrowing as above.
-            assert spec.host is not None
+        else:  # tcp
+            assert spec.host is not None  # guaranteed by ConnectionSpec.__post_init__
             client = await MeshCore.create_tcp(
                 host=spec.host, port=spec.tcp_port, debug=debug, default_timeout=timeout
             )
     except Exception as exc:
         raise ConnectError(f"failed to connect ({spec.summary()}): {exc}") from exc
 
-    # `meshcore.MeshCore` structurally satisfies `MeshCoreConnection` (that's the whole
-    # point of the protocol), but its `self_info` is a property and `subscribe()` has a
-    # wider signature than the narrow surface this protocol intentionally exposes to
-    # command modules -- both of which read as real mismatches to a structural type
-    # checker. Cast rather than loosen the protocol.
+    # MeshCore satisfies MeshCoreConnection structurally, but self_info is a
+    # property and subscribe()'s signature is wider than this protocol
+    # exposes -- both read as mismatches to a structural type checker.
     return cast(MeshCoreConnection, client)

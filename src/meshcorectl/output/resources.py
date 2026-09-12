@@ -1,10 +1,8 @@
 """Per-resource-kind column definitions, looked up by `output.render()`.
 
-Resource commands (`get contacts`, `get channels`, ... — Phase 2+) register
-their column layout here once, at import time, instead of every command
-reimplementing table-vs-wide-vs-name logic. Phase 1 ships the registry
-itself with nothing registered yet; see `tests/unit/test_output.py` for how
-it's exercised with synthetic resource kinds in the meantime.
+Resource commands (`get contacts`, `get channels`, ...) register their
+column layout here once, at import time, instead of every command
+reimplementing table-vs-wide-vs-name logic.
 """
 
 from __future__ import annotations

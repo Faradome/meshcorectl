@@ -1,8 +1,7 @@
 """`meshcorectl reboot` -- reboot the connected device.
 
-No interactive y/n confirmation (PLAN.md §6 drops those): `--yes` is a
-required flag instead, the same non-interactive-but-still-safe pattern as
-`terraform apply -auto-approve` or `helm uninstall --no-hooks`.
+No interactive y/n prompt: `--yes` is a required flag instead, the same
+pattern as `terraform apply -auto-approve`.
 """
 
 from __future__ import annotations

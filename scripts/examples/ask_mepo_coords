@@ -1,8 +1,6 @@
 #!/bin/sh
-# Carried over unchanged from the original meshcore-cli's
-# scripts/ask_mepo_coords (MIT-licensed, by the meshcore-cli project) --
-# it never depended on that tool's interactive redirection DSL, only the
-# *consumption* pattern changes under meshcorectl:
+# Unchanged from the original meshcore-cli's scripts/ask_mepo_coords
+# (MIT-licensed, by the meshcore-cli project).
 #
 #   ./ask_mepo_coords            # opens mepo, waits for a long-click
 #   lat=$(./ask_mepo_coords lat keep)

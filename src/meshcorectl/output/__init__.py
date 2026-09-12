@@ -1,9 +1,9 @@
 """Output-format dispatch: table / wide / json / yaml / name.
 
-Every read command (Phase 2+) funnels its result through `render()` here
-instead of hand-rolling per-command JSON/table logic — one place governs
-what `-o json`, `-o yaml`, `-o wide`, and `-o name` mean, consistently,
-across every resource kind.
+Every read command funnels its result through `render()` here instead of
+hand-rolling per-command JSON/table logic, so one place governs what
+`-o json`, `-o yaml`, `-o wide`, and `-o name` mean across every resource
+kind.
 """
 
 from __future__ import annotations
@@ -85,14 +85,12 @@ _F = TypeVar("_F", bound=Callable[..., Any])
 def output_option(f: _F) -> _F:
     """A per-command `-o/--output` override.
 
-    The global `-o` (on the root group) only takes effect *before* the
-    subcommand (`meshcorectl -o json get device`) -- real `kubectl` also
-    accepts it after the verb (`kubectl get pods -o json`), which is the
-    far more common muscle-memory order and was found broken (Click has no
-    "recognize a parent group's option after a subcommand" mechanism) during
-    live hardware testing. Every command that renders through `render()`/
-    `render_result()` takes this local override too; `resolve_output()`
-    prefers it over the global one when both are given.
+    The global `-o` (on the root group) only takes effect before the
+    subcommand (`meshcorectl -o json get device`); Click has no mechanism
+    for a parent group's option to apply after a subcommand. This decorator
+    adds a local `-o` to the command itself so `get device -o json` also
+    works, matching kubectl. `resolve_output()` prefers the local value over
+    the global one when both are given.
     """
     return click.option(
         "-o",

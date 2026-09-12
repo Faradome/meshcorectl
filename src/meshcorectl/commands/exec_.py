@@ -56,8 +56,6 @@ def exec_command(
     first word whenever -l/--selector was used instead. `--` is stripped by
     Click itself wherever it appears, so it doesn't show up in `args`.
     """
-    # (REPEATER omitted) vs (REPEATER given) is exactly the ambiguity this
-    # single-argument split exists to resolve -- see the docstring above.
     tokens = list(args)
     if selector_text is None:
         if not tokens:

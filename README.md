@@ -2,16 +2,13 @@
 
 > **This is an AI-generated application.** The design, code, tests, and documentation in this
 > repository were produced by an AI coding agent (Claude), directed and reviewed by a human
-> maintainer. See [PLAN.md](PLAN.md) for the design rationale and delivery history.
+> maintainer.
 
-A ground-up, non-interactive rewrite of
-[meshcore-cli](https://github.com/meshcore-dev/meshcore-cli), modeled on `kubectl`'s
-command/argument structure instead of that tool's REPL-and-argument-chain style:
-`meshcorectl VERB [TYPE] [NAME] [flags]`, named connection contexts instead of a single cached
-device address, and `-o table|json|yaml|wide|name` output on every read command.
+A non-interactive, kubectl-style CLI for MeshCore companion radios:
+`meshcorectl VERB [TYPE] [NAME] [flags]`, named connection contexts (BLE/serial/TCP), and
+`-o table|json|yaml|wide|name` output on every read command.
 
-Coming from `meshcli`/`meshcore-cli`? See [docs/migration-from-meshcli.md](docs/migration-from-meshcli.md).
-For the full design rationale behind every choice below, see [PLAN.md](PLAN.md).
+For design rationale and architecture, see [PLAN.md](PLAN.md).
 
 ## Install
 
@@ -49,12 +46,8 @@ thing, and exits, which is what makes it scriptable.
 
 ## Status
 
-Phases 1–4 of [PLAN.md](PLAN.md) are done: connection contexts, the full read path (`get`,
-`describe`, `top`, `logs`, `scan`, `version`), the full write path (`create`, `delete`, `send`,
-`exec`, `login`/`logout`, `trace`, `advert`, `reboot`, `set device`) with `-l` selectors and
-`--dry-run` throughout, shell completion, and this documentation. A background-agent daemon for
-low-latency repeated invocations (`meshcored`) is tracked as future work, not required for normal
-use — see PLAN.md's Decision 1.
+Every command in this README is implemented and tested. A background-agent daemon for
+low-latency repeated invocations (`meshcored`) is planned but not yet built.
 
 ## Development
 
@@ -62,7 +55,7 @@ use — see PLAN.md's Decision 1.
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
-pytest                # 100% line+branch coverage enforced (see PLAN.md §8)
+pytest                # 100% line+branch coverage enforced
 ruff check .
 mypy
 ```

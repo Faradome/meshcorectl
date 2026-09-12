@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Regenerates docs/command-reference.md straight from every command's
---help text, so the reference can't drift from the actual flags (PLAN.md
-§7). Run it after adding/changing a command:
+--help text, so the reference can't drift from the actual flags. Run it
+after adding/changing a command:
 
     python3 scripts/generate_command_reference.py
 

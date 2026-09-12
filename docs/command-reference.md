@@ -295,7 +295,7 @@ Commands:
 Usage: meshcorectl delete channel [OPTIONS] INDEX_OR_NAME
 
   Clear channel INDEX_OR_NAME (there's no true delete: the name and secret are
-  cleared, the original tool's own convention).
+  cleared instead).
 
 Options:
   --dry-run  Show what would be deleted without deleting it.

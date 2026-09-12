@@ -48,11 +48,9 @@ def set_device_command(
     click.echo(render_result({"param": param, "value": value}, fmt, text))
 
 
-# Click captures `help` from the docstring at decoration time, so the
-# `{params}` placeholder is filled in on the resulting Command's `.help`
-# afterward, not on the original function's `__doc__` (which no longer
-# matters once decorated). textwrap keeps the (`\b`-protected, so
-# Click won't re-wrap it) parameter list readable at a normal terminal
-# width instead of one very long line.
+# Click captures `help` from the docstring at decoration time, so `{params}`
+# is filled in on the Command's `.help` afterward, not the original
+# function's `__doc__`. textwrap keeps the `\b`-protected parameter list
+# readable instead of one long line.
 _params_wrapped = textwrap.fill(", ".join(DEVICE_PARAMS), width=76)
 set_device_command.help = (set_device_command.help or "").format(params=_params_wrapped)

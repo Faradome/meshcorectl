@@ -1,20 +1,17 @@
-"""`-l/--selector` filter grammar -- ported from the original tool's
-`apply_to <filter> <cmd>` command (PLAN.md Decision 4), but as a flag
-reusable on `get`, `delete`, `send`, `exec`, and `login` instead of its own
-bespoke batch-apply verb: `meshcorectl delete contact -l 't=1,u>2d'`.
+"""`-l/--selector` filter grammar for `get`, `delete`, `send`, `exec`, and
+`login`: `meshcorectl delete contact -l 't=1,u>2d'`.
 
 Grammar: comma-separated clauses, each `field<op>value` (ops: `<`, `>`,
 `=`) or a bare flag clause (`d`, `f`):
 
-    t=repeater   contact type is "repeater" (name or the original's numeric
-                 code both work: t=2 means the same thing)
+    t=repeater   contact type is "repeater" (a numeric code also works: t=2)
     h>2          more than 2 hops away
     u<2d         last updated more than 2 days ago
     u>1h         last updated within the last hour
     d            direct (0 hops) -- same as h=0
     f            flood (unknown path) -- same as h<0
 
-Clauses are ANDed together. Operates on the same normalized contact dicts
+Clauses are ANDed together. Operates on the normalized contact dicts
 `mesh_data.normalize_contact` produces (needs `type`/`hops`/`lastmod`).
 """
 

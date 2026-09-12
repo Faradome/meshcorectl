@@ -2,7 +2,7 @@
 the live CLI and diff against what's checked in. A command added, renamed,
 or re-worded without re-running
 `python3 scripts/generate_command_reference.py` fails this test instead of
-silently rotting (PLAN.md §7's whole point for this doc).
+silently rotting.
 """
 
 from __future__ import annotations

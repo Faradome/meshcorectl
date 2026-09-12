@@ -1,9 +1,7 @@
 """`meshcorectl scan` -- non-interactive discovery of BLE/serial candidates.
 
-Replaces the original tool's interactive device-picker dialog (`-S`) with a
-plain read-only listing: pick an address/port from the output and pass it to
-`meshcorectl config set-context`, rather than selecting it live in a menu
-(PLAN.md §6 -- interactive pickers are explicitly dropped).
+A plain read-only listing: pick an address/port from the output and pass it
+to `meshcorectl config set-context`.
 """
 
 from __future__ import annotations

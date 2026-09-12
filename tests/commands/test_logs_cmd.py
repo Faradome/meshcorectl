@@ -110,10 +110,10 @@ def test_logs_follow_subscribes_and_prints_live_messages(
     runner, configured_store, fake_connection, monkeypatch
 ):
     script_no_contacts_or_channels(fake_connection)
-    # CONTACT_MSG_RECV/CHANNEL_MSG_RECV aren't passively pushed (confirmed on
-    # real hardware): a live message only ever surfaces via get_msg(),
-    # triggered here by a MESSAGES_WAITING push -- not by subscribing to the
-    # message-event types directly (that was the bug).
+    # CONTACT_MSG_RECV/CHANNEL_MSG_RECV aren't passively pushed: a live
+    # message only surfaces via get_msg(), triggered here by a
+    # MESSAGES_WAITING push, not by subscribing to the message-event types
+    # directly.
     fake_connection.commands.script(
         "get_msg",
         Event(EventType.NO_MORE_MSGS, {}),  # initial drain: nothing queued yet

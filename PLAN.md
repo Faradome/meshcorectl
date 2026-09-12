@@ -1,100 +1,14 @@
-# meshcore-cli rewrite — design plan
+# meshcorectl — design & architecture
 
-Ground-up Python rewrite of [meshcore-dev/meshcore-cli](https://github.com/meshcore-dev/meshcore-cli),
-dropping the interactive REPL and modeling command/argument structure on `kubectl`.
+A non-interactive, kubectl-style CLI for MeshCore companion radios. The `meshcore` PyPI package
+provides the BLE/serial/TCP transports, frame parsing, an async client with a `commands.*` API,
+and an `EventType` pub/sub model; this project implements only the CLI layer on top of it.
 
-Working name for the new binary: **`meshcorectl`** (see [Decision 5](#decision-5-binary-name)).
-
-## Progress
-
-- **Phase 1 (scaffolding): done.** Contexts, the `connect.py` seam, the output
-  layer, `meshcorectl config ...`.
-- **Phase 2 (read path): done.** `get` (device/contacts/contact/channels/
-  channel/pending-contacts/path/time), `describe` (device/contact), `top
-  contact [--history]`, `logs [-f] [--since] [--rx]`, `scan`, `version`.
-  All command modules call through `mesh_data.py`'s pure Event-translation
-  helpers, which is why 100% coverage held through this phase too (see §8).
-- **Phase 3 (write path): done.** `create` (contact --uri, channel), `delete`
-  (contact by name or `-l` selector, channel), `send` (message, channel),
-  `exec` (repeater console command + reply), `login`/`logout`, `top`'s
-  telemetry, `trace`, `advert`, `reboot`, `set device`, and `selectors.py`
-  (the `-l` grammar) wired into `get`/`delete`/`send`/`exec`/`login`. One
-  deliberate deviation from this doc's original command-tree sketch: no
-  `delete pending-contacts` — see the note under §3.
-  `--dry-run` on every mutating command, per §2's idiom table.
-- **Phase 4 (polish): done.** `completion` (bash/zsh/fish, via Click's own
-  shell-completion machinery), `docs/command-reference.md` (generated from
-  `--help`, and kept honest by a test that regenerates it in memory and
-  diffs against what's committed), `docs/migration-from-meshcli.md` (full
-  old→new command mapping, plus `scripts/examples/` — the original tool's
-  example scripts ported where their logic didn't depend on the dropped
-  interactive DSL, and left unported with an explicit note where it did),
-  and a verified-buildable package (wheel + sdist built and smoke-installed
-  into a clean venv; actually publishing to PyPI is left for you to decide
-  and do, since it's a one-way, externally-visible action).
-- **Phase 5 (optional): `meshcored` background agent — not started.** The
-  only phase left in this doc; see Decision 1.
-
-## 0. Scope & assumptions
-
-- **Reuse, don't reimplement, the wire protocol.** The `meshcore` PyPI package
-  ([fdlamotte/meshcore_py](https://github.com/fdlamotte/meshcore_py)) already implements the
-  BLE/serial/TCP transports, frame parsing, and an async `MeshCore` client with a
-  `commands.*` API (`commands.get_contacts`, `commands.send_msg`, `commands.send_device_query`,
-  etc.) plus an `EventType` pub/sub model. This plan rewrites **only the CLI layer** on top of
-  that library — same as the original tool did. Re-implementing the mesh protocol itself is a
-  separate, much larger project and is out of scope unless you want that too.
-- **Interactive features are dropped, not ported.** No REPL, no `to`/chat navigation, no
-  `>`/`>>`/`|`/`<|` line-redirection DSL, no `alias`/`{}` placeholder engine, no
-  `handler_attach` shell-piping, no interactive BLE device picker, no serial "repeater mode"
-  raw console (`-r` + sxmo scripts). Every one of these is enumerated in
-  [§6](#6-explicitly-dropped-features-and-their-replacement) with its non-interactive
-  replacement (usually: shell already does this better).
-- **Python stays.** Target Python 3.10+ (matches the current `meshcore` dependency's floor).
-
-## 1. What the current tool actually does (audit)
-
-Read the original source (`src/meshcore_cli/meshcore_cli.py`, 5,322 lines) to ground this
-plan in reality rather than the README alone:
-
-| Concern | Current implementation | Problem for a "first-class CLI" |
-|---|---|---|
-| Argument parsing | Hand-rolled `getopt.getopt("a:d:s:ht:p:b:fjDhvSlT:Pc:Crqi")` | Single-letter flags only, no subcommands, no `--help` per command, no shell completion |
-| Command dispatch | One `next_cmd()` function, a 2,000-line `match cmd:` block (`meshcore_cli.py:2212`–`4153`) | No separation of concerns, untestable in isolation, adding a command means editing a monolith |
-| Command shape | Positional tokens (`msg <name> <msg>`, `set <param> <value>`), commands chainable in one invocation (`meshcli clock clock sync clock`) | No resource/verb consistency; `.` prefix or `-j` flag toggles JSON per-invocation rather than a clean `-o` flag |
-| Connection | Re-established fresh on every process invocation (BLE/serial/TCP); last BLE address cached in a single flat file `$HOME/.config/meshcore/<addr>` | No named multi-device profiles; reconnect cost paid every invocation |
-| Interactive mode | `prompt_toolkit` REPL, default when no args given; chat navigation (`to`), slash commands, redirection operators, alias engine, handler_attach | This is the whole piece we're told to drop |
-| State/config | Global mutable module-level variables (`ARROW_HEAD`, `HAS_CLI_CMD`, function-attribute "statics" like `msg_ack.max_attempts=`) | Not thread/test-friendly, surprising |
-| Output | Ad hoc per-command string building, sometimes JSON sometimes not, mixed into the same function as the logic | No consistent machine-readable path |
-
-## 2. Kubectl idioms we're borrowing
-
-kubectl's structure is `kubectl VERB [TYPE] [NAME] [flags]` plus a handful of standalone
-imperative verbs, backed by a client/server split and a `~/.kube/config` context file. Mapping
-each idiom over:
-
-| kubectl idiom | meshcorectl equivalent |
-|---|---|
-| `kubectl get pods`, `kubectl get pod foo -o yaml` | `meshcorectl get contacts`, `meshcorectl get contact foo -o yaml` |
-| `kubectl describe pod foo` (verbose, human, includes derived/event info) | `meshcorectl describe contact foo` (telemetry, path, flags, last-seen, all in one human view) |
-| Resource short names (`po`, `svc`, `deploy`, `ns`) | `ct` (contact), `ch` (channel), `dev` (device) |
-| `-o json\|yaml\|wide\|name` | Same flag, same values, on every read command |
-| `-l/--selector key=value` batch targeting (`kubectl delete pods -l app=foo`) | Same flag reusing the original `apply_to` filter grammar (`-l t=2,u<24h`) on `get`, `delete`, `send`, `exec`, `login` — replaces the bespoke `apply_to` command |
-| `kubectl exec pod -- cmd` | `meshcorectl exec repeater-name -- <raw cli command>` (repeater console command) |
-| `kubectl logs [-f] [--since]` | `meshcorectl logs [-f] [--since]` (unread-message drain / live tail — see [§4.2](#42-logs-the-hard-one)) |
-| `kubectl top node/pod` | `meshcorectl top contact NAME [--history]` (telemetry / min-max-avg) |
-| `kubectl config get-contexts/use-context/current-context/view` | `meshcorectl config …` over named connection profiles (BLE address, serial port, TCP host) replacing the single cached-address file |
-| `kubectl version` (prints Client + Server version) | `meshcorectl version` (prints CLI version + connected device firmware version) |
-| `kubectl completion bash/zsh/fish` | `meshcorectl completion bash/zsh/fish` |
-| `--dry-run` | Same, on every mutating command |
-| `-v` verbosity levels | Same, replaces `-D` debug flag |
-| Non-CRUD standalone verbs (`cordon`, `drain`, `taint`) | `advert`, `reboot`, `trace`, `login`, `logout` stay top-level verbs, not shoehorned into `get/create/delete` |
-
-## 3. Command tree
+## Command tree
 
 ```
 meshcorectl
-├── get           device | contacts | contact NAME | channels | channel N |
+├── get           device | contacts [-l] [-A] | contact NAME | channels [-A] | channel N |
 │                 pending-contacts | path CONTACT | time
 ├── describe      device | contact NAME
 ├── create        contact --uri URI   (import)
@@ -103,10 +17,10 @@ meshcorectl
 │                 channel N
 ├── send          message [CONTACT | -l selector] TEXT [--wait-ack]
 │                 channel N TEXT
-├── exec          [REPEATER | -l selector] -- CLI_CMD  (raw repeater console cmd)
+├── exec          [REPEATER | -l selector] -- CLI_CMD  (raw repeater console command)
 ├── login         [REPEATER | -l selector] [--password | --password-stdin]
 ├── logout        REPEATER
-├── top           contact NAME [--history]        (telemetry / mma)
+├── top           contact NAME [--history]        (telemetry / min-max-avg)
 ├── logs          [-f] [--since DURATION] [--rx]   (message stream)
 ├── trace         PATH
 ├── advert        [--flood]
@@ -119,194 +33,133 @@ meshcorectl
 └── completion    bash | zsh | fish
 ```
 
-Every noun gets singular + plural + short form where kubectl would (`contact`/`contacts`/`ct`,
-`channel`/`channels`/`ch`). Every command gets real `--help` text and a man-page-quality
-description generated from the same source (see [§7](#7-documentation)).
+Every noun gets singular + plural + short form (`contact`/`contacts`/`ct`, `channel`/`channels`/`ch`).
+Every command has real `--help` text, generated into [docs/command-reference.md](docs/command-reference.md).
 
-**Deviation found during Phase 3:** there is no `delete pending-contacts` (the original tool's
-`flush_pending`), even though it was in this doc's first sketch of the tree above. "Pending"
-contacts are purely client-side bookkeeping the original tool accumulated over a long-lived
-session (adverts seen but not yet added, tracked in its own process memory) — the device itself
-has no concept of them. A one-shot connection (Decision 1) never accumulates anything *across*
-invocations, so `get pending-contacts` already had to become "watch for one timeout window"
-instead of "read a cache" (§3's tree, `get`'s row) — and a `delete`/flush of that same
-never-persisted state genuinely has nothing to do. Implementing it as a command anyway would
-be a no-op with a straight face; better to not ship it than ship a command whose only job is to
-print "there was never anything to flush."
+No `delete pending-contacts`: pending contacts are watched for over one `--timeout` window (see
+`get pending-contacts`), never persisted, so there is nothing for a delete to ever clear.
 
-## 4. Design decisions (locked)
+## kubectl idioms this CLI borrows
 
-### Decision 1: one-shot connections now, background agent later — **decided**
+| kubectl idiom | meshcorectl equivalent |
+|---|---|
+| `kubectl get pods`, `kubectl get pod foo -o yaml` | `meshcorectl get contacts`, `meshcorectl get contact foo -o yaml` |
+| `kubectl describe pod foo` | `meshcorectl describe contact foo` (telemetry, path, flags, last-seen, one human view) |
+| Resource short names (`po`, `svc`, `deploy`) | `ct` (contact), `ch` (channel), `dev` (device) |
+| `-o json\|yaml\|wide\|name` | Same flag, same values, on every read command |
+| `-l/--selector key=value` batch targeting | Same flag on `get`, `delete`, `send`, `exec`, `login` (`-l t=2,u<24h`) |
+| `kubectl exec pod -- cmd` | `meshcorectl exec repeater-name -- <raw console command>` |
+| `kubectl logs [-f] [--since]` | `meshcorectl logs [-f] [--since]` |
+| `kubectl top node/pod` | `meshcorectl top contact NAME [--history]` |
+| `kubectl config get-contexts/use-context/current-context/view` | `meshcorectl config …` over named connection profiles |
+| `kubectl version` | `meshcorectl version` (CLI version + connected device firmware) |
+| `kubectl completion bash/zsh/fish` | `meshcorectl completion bash/zsh/fish` |
+| `--dry-run` | Same, on every mutating command |
+| Non-CRUD standalone verbs (`cordon`, `drain`) | `advert`, `reboot`, `trace`, `login`, `logout` stay top-level, not shoehorned into `get`/`create`/`delete` |
 
-The original tool tolerated slow BLE/serial connect time by letting you chain many commands in
-a single invocation (`meshcli clock clock sync clock`). A strict "one verb per invocation"
-kubectl-style CLI loses that unless something holds the connection open.
+## Design decisions
 
-- **v1 (building this): direct-connect, one connection per invocation.** Simplest, matches the
-  original's process model, fine for interactive terminal use and for scripts that don't call
-  `meshcorectl` in a tight loop. BLE connect is the slow case (~1–3s); TCP/serial are fast.
-- **v2 (confirmed future work): `meshcored` background agent.** A small daemon owns the
-  persistent BLE/serial/TCP connection and exposes a local Unix-socket API; `meshcorectl`
-  becomes a thin stateless client — literally the kubectl/kube-apiserver split applied to a mesh
-  radio. This unlocks `meshcorectl get contacts -w` (watch), instant repeated invocations, and
-  event subscriptions that outlive any single command.
+### One-shot connections; a background daemon is future work
 
-Because v2 is confirmed (not just a maybe), `connect.py` in §5 is designed as the single seam
-where a v2 client swaps in for the v1 direct-connect client without touching command modules —
-every command talks to a small internal protocol (`open() -> ConnectedClient`), never to
-`meshcore.MeshCore` directly. That seam is also what makes command modules testable against a
-fake in §8.
+Each invocation opens a connection, acts, and disconnects. Simplest model; fine for interactive
+use and for scripts that don't call `meshcorectl` in a tight loop (BLE connect is the slow case,
+~1-3s; TCP/serial are fast).
 
-### Decision 2: CLI framework — Click — **decided**
+A future `meshcored` background agent would own a persistent BLE/serial/TCP connection and
+expose it over a local socket, making `meshcorectl` a thin client — unlocking `get contacts -w`
+(watch), instant repeated invocations, and event subscriptions that outlive one command.
+`connect.py` is the one seam such a client would replace: every command talks to a small
+`MeshCoreConnection` protocol, never to `meshcore.MeshCore` directly, so swapping the connection
+method touches no command module. This is also what makes command modules testable against a
+fake connection (see Testing, below).
 
-kubectl (Cobra, in Go) is a tree of commands each with local + persistent (inherited) flags,
-sharing a context object. **Click** is the closest Python equivalent: nested `Group`s map
-directly onto the verb tree in §3, a `click.Context` carries the resolved connection + output
-formatter down through subcommands (Cobra's `PersistentPreRun` equivalent), and it has built-in
-shell completion generation for free (→ `completion` command is nearly zero extra code). Click
-also ships `click.testing.CliRunner`, which is what makes the "maximum test coverage" goal in
-§8 tractable — every command is invocable in-process with captured stdout/stderr/exit code.
+### Click as the CLI framework
 
-### Decision 3: table rendering — plain aligned text, zero color in v1 — **decided**
+Nested `Group`s map directly onto the command tree; a `click.Context` carries the resolved
+connection and output formatter down through subcommands; shell completion is close to free.
+`click.testing.CliRunner` runs any command in-process with captured stdout/stderr/exit code,
+which is what makes full test coverage practical.
 
-No ANSI color anywhere in this initial build — not even TTY-detected/opt-in. Readability comes
-entirely from alignment and text formatting: fixed-width columns computed per-invocation from
-content, consistent left/right justification (text left, numeric right, like kubectl's own
-tabwriter), blank-line and header separation in `describe` views, and `-`/`<none>` placeholders
-for empty fields instead of blank cells. A small internal tab-writer (~50 lines, no dependency)
-covers this — no `rich`, no `colorama`. JSON via stdlib `json`; YAML via `pyyaml` (one
-lightweight, ubiquitous dependency). Color is explicitly deferred to a later phase, not built
-now and disabled — there is no color code to gate in v1, which also means one less thing to test.
+### Plain aligned text, no color
 
-### Decision 4: selectors replace `apply_to` — **decided**
+Fixed-width columns computed per invocation, consistent left-justification (text and numeric
+columns alike, matching kubectl's own tabwriter), `-` placeholders for empty fields. No ANSI
+color, no `rich`/`colorama` dependency — a ~50-line internal table writer covers it. JSON via
+stdlib `json`; YAML via `pyyaml`.
 
-Port the original's contact-filter grammar (`u`=updated-time, `t`=type, `h`=hops, `d`=direct,
-`f`=flood) verbatim into a `-l/--selector` flag, but make it a flag on existing verbs instead of
-its own command:
+### `-l/--selector` filtering
+
+A `t=`/`h=`/`u=`/`d`/`f` contact-filter grammar as a `-l/--selector` flag reused across
+`get`/`delete`/`send`/`exec`/`login`, rather than a separate batch-apply command:
 
 ```
-meshcorectl delete contact -l 't=1,u>2d'          # was: apply_to u>2d,t=1 remove_contact
-meshcorectl exec -l 't=2,d' -- trace              # was: apply_to t=2,d trace
+meshcorectl delete contact -l 't=1,u>2d'
+meshcorectl login -l 't=2,d' --password-stdin < password.txt
 ```
 
-This is exactly `kubectl delete pods -l app=foo` — one flag, reused everywhere, instead of a
-bespoke batch-apply verb.
+Exactly `kubectl delete pods -l app=foo`'s shape: one flag, reused everywhere.
 
-### Decision 5: binary name — **decided: `meshcorectl`**
+### Binary name: `meshcorectl`
 
-New console-script name, deliberately in the `kubectl`/`systemctl`/`<subject>ctl` family this
-whole rewrite is modeled against — rather than silently reusing `meshcli`/`meshcore-cli` for a
-tool with an incompatible command grammar and a removed REPL. Ship it as a new PyPI distribution
-(or a clearly-major-version bump of the existing one) with the migration guide (§7) front and
-center in the README, since every existing script and muscle-memory alias breaks on purpose.
+In the `kubectl`/`systemctl`/`<subject>ctl` family.
 
-## 5. Package layout
+## Package layout
 
 ```
 meshcorectl/
 ├── pyproject.toml
 ├── src/meshcorectl/
-│   ├── __init__.py
-│   ├── __main__.py
-│   ├── cli.py            # root Click group: global --context/-o/--timeout/-v (no --no-color: no color exists yet, §4/D3)
-│   ├── context_store.py  # ~/.config/meshcorectl/config.yaml — named connection contexts
-│   ├── connect.py        # resolve context -> meshcore.MeshCore via create_ble/serial/tcp
-│   ├── selectors.py       # -l filter grammar (parse + match against a contact dict)
+│   ├── cli.py             # root Click group: global --context/-o/--timeout/-v
+│   ├── context_store.py   # ~/.config/meshcorectl/config.yaml — named connection contexts
+│   ├── connect.py         # resolve context -> meshcore.MeshCore via create_ble/serial/tcp
+│   ├── mesh_data.py        # Event/payload -> plain dict translation, no Click
+│   ├── selectors.py        # -l filter grammar (parse + match against a contact dict)
 │   ├── output/
-│   │   ├── __init__.py    # dispatch on -o table|json|yaml|name
+│   │   ├── __init__.py    # dispatch on -o table|wide|json|yaml|name
 │   │   ├── table.py       # dependency-free column writer
-│   │   └── resources.py   # per-resource column defs + describe-view layouts
-│   └── commands/
-│       ├── get.py  describe.py  create.py  delete.py  send.py  exec_.py
-│       ├── login.py  top.py  logs.py  trace.py  advert.py  reboot.py
-│       ├── set_.py  scan.py  config_cmd.py  version.py  completion.py
+│   │   └── resources.py   # per-resource column definitions
+│   └── commands/          # one module per verb: get.py, describe.py, create.py, ...
 ├── tests/
-│   ├── fakes/
-│   │   └── meshcore_double.py  # fake MeshCore/CommandHandler: scripted Event responses + error injection
-│   ├── unit/              # selectors, table/output formatting, context_store — no hardware
-│   └── commands/          # one test module per commands/*.py, via Click CliRunner + the fake
-├── docs/
-│   ├── command-reference.md     # generated from --help
-│   └── migration-from-meshcli.md
-├── pytest.ini             # or [tool.pytest.ini_options] in pyproject.toml; --cov + fail-under gate
-└── .github/workflows/ci.yml     # pytest + coverage gate + ruff + mypy on 3.10–3.13
+│   ├── fakes/meshcore_double.py  # fake MeshCore/CommandHandler: scripted Event responses
+│   ├── unit/               # selectors, table/output formatting, context_store, mesh_data
+│   └── commands/           # one test module per commands/*.py, via Click CliRunner + the fake
+└── docs/command-reference.md     # generated from --help
 ```
 
 `connect.py` is the only module that imports `meshcore`'s transport classes; every command
-module receives an already-connected client through the Click context, which is what makes
-`tests/commands/` fast and hardware-free (inject a fake client with canned `commands.*`
-responses, the same trick kubectl's own tests use with a fake clientset). See §8 for how that
-double is used to hit high coverage from the first commit rather than as a Phase-4 afterthought.
+module receives an already-connected client through the Click context, which is what keeps
+`tests/commands/` fast and hardware-free.
 
-## 6. Explicitly dropped features and their replacement
+## Non-interactive by design
 
-| Dropped | Why it was interactive-only | Non-interactive replacement |
-|---|---|---|
-| REPL / chat mode, `to` navigation | Whole point of the ask | none — use one-shot commands |
-| `/`-prefixed slash commands | REPL-only addressing shortcut | full noun/verb command each time |
-| `>`, `>>`, `\|`, `<\|` line redirection | Reimplements shell redirection inside the tool | your shell already does this: `meshcorectl get contacts -o json > f.json` |
-| Alias engine (`alias`, `@name`, `{}`/`{c}` placeholders) | Built to shorten REPL lines | shell aliases/functions, or a `Makefile`/script |
-| `handler_attach`/`handler_detach` (pipe rxlog/msgs to a shell process) | REPL-session-scoped subprocess plumbing | `meshcorectl logs -f --rx \| your-command` |
-| Interactive BLE device picker (`-S`, `radiolist_dialog`) | Literal interactive dialog | `meshcorectl scan` prints a table; pick one and pass `--address`/`meshcorectl config set-context` |
-| Serial "repeater mode" raw console (`-r`) + sxmo scripts | Bespoke raw-serial line-editing console | out of scope for v1; candidate for a `meshcorectl exec` variant later if there's demand |
-| Channel-echo ANSI art, classic-prompt toggle, `wait_key` | Prompt/terminal cosmetics | n/a |
-| `script <file>` (run a list of commands from a file) | Mostly a REPL/chaining convenience | shell script that calls `meshcorectl` per line; revisit as `apply -f` (declarative) only if real demand shows up |
+No REPL, chat navigation, line-redirection DSL, alias engine, or interactive device picker. A
+shell already covers these better: pipe to `jq`, redirect with `>`, use shell aliases/functions.
+`scan` prints a plain table of discoverable devices to pick an address from, instead of an
+interactive picker.
 
-## 7. Documentation
+## Testing strategy
 
-- `docs/command-reference.md` generated straight from each command's `--help` (Click makes this
-  mechanical) — keeps reference docs from rotting relative to the actual flags.
-- `docs/migration-from-meshcli.md`: one row per old command → new command, since this is a
-  deliberate breaking rewrite (§0). Also update the example scripts shipped in the original repo
-  (`scripts/contact_markers.sh`, `scripts/neighbour_map.sh`, `scripts/getpos.py`,
-  `scripts/ask_mepo_coords`) to the new grammar as worked examples.
+- **A fake connection is the foundation.** `tests/fakes/meshcore_double.py` implements the same
+  surface every command module calls (`commands.get_contacts`, `commands.send_msg`, `subscribe`,
+  …) and returns scripted `Event`/`EventType` values, including error payloads, timeouts, and
+  disconnects. No command module ever touches real BLE/serial/TCP in a test.
+- **Every command gets a table-driven CliRunner test**: happy path, the device returning
+  `EventType.ERROR`, a not-found argument, and — for mutating commands — `--dry-run` performing
+  no `commands.*` call. Selector-aware commands get matrix cases (matches none/one/many).
+  Commands that only need one connection assert `connect_call_count == 1`.
+- **Pure-logic modules get unit tests with no Click/CLI involvement**: `selectors.py` (grammar
+  parsing, comparison operators, relative-time suffixes), `output/table.py` (column widths, empty
+  placeholders), `context_store.py` (YAML round-trip, missing/corrupt file, unknown context),
+  `mesh_data.py` (Event-to-dict translation for every resource kind).
+- **Coverage gate**: `pytest --cov=meshcorectl --cov-report=term-missing --cov-fail-under=90`.
+  `connect.py`'s transport-selection calls are the one piece that would need real hardware to
+  exercise directly; everything above that seam is covered by the fake.
+- **Out of scope for now**: hardware-in-the-loop tests against a real device in CI. Worth
+  revisiting once a `meshcored` daemon exists, since a long-lived process is a better fit for an
+  opt-in nightly hardware job than a one-shot CLI is.
 
-## 8. Testing strategy
+## Future work
 
-"Maximum coverage from the beginning" means test infrastructure is part of Phase 1, not
-something added once features exist, and no command module is considered done until it has
-tests — not a backlog item for Phase 4.
-
-- **The fake is the foundation.** `tests/fakes/meshcore_double.py` implements the same surface
-  every command module calls (`commands.get_contacts`, `commands.send_msg`,
-  `commands.send_device_query`, `subscribe`, …) and returns scripted `Event`/`EventType` values,
-  including `EventType.ERROR` payloads, timeouts, and disconnects. It's built in Phase 1
-  alongside `connect.py`, before any read/write commands exist, so every command from Phase 2
-  onward is written test-first against it. Because §4/Decision 1 already isolates connection
-  behind `connect.py`, no command module ever touches real BLE/serial/TCP in a test.
-- **Every command gets a table-driven CliRunner test**, minimum: happy path, the device
-  returning `EventType.ERROR`, a not-found argument (e.g. unknown contact name), and — for
-  mutating commands — `--dry-run` performing no `commands.*` call. Selector-aware commands
-  (`get`/`delete`/`send`/`exec`/`login` with `-l`) get selector-matrix cases (matches
-  none/one/many).
-- **Pure-logic modules get unit tests with no Click/CLI involvement at all**: `selectors.py`
-  (the `t=`/`h=`/`u=`/`d`/`f` grammar — parser edge cases, comparison operators, relative-time
-  suffixes `d`/`h`/`m`), `output/table.py` (column widths, empty-value placeholders, unicode
-  name widths), `context_store.py` (read/write/round-trip the YAML, missing file, corrupt file,
-  unknown `use-context` target).
-- **Golden/snapshot tests for `-o json`/`-o yaml`/`-o table`/`-o name` output** on a couple of
-  representative resources (a contact, a channel, the device), so accidental output-shape
-  regressions are caught even though there's no schema contract with real consumers yet.
-- **Coverage gate in CI**, enforced from the first PR: `pytest --cov=meshcorectl
-  --cov-report=term-missing --cov-fail-under=90` (number to tune once the codebase exists, but
-  the gate itself ships in Phase 1's CI workflow, not added later). `connect.py`'s thin
-  transport-selection glue (the few lines that literally call `meshcore.create_ble/serial/tcp`)
-  is the one module allowed a `# pragma: no cover` carve-out, since exercising it means real
-  hardware — everything above that seam is covered by the fake.
-- **Out of scope for v1:** hardware-in-the-loop tests against a real device. Worth revisiting
-  once the Phase 5 `meshcored` daemon exists, since a long-lived daemon process is a much better
-  fit for an opt-in nightly hardware CI job than a one-shot CLI is.
-
-## 9. Delivery phases
-
-1. **Scaffolding** — package skeleton, `context_store.py` + `config` command group, `connect.py`,
-   root Click group with global flags, output layer (table/json/yaml), the `meshcore_double`
-   test fake, and CI wired with the coverage gate from §8 — all before the first real command.
-2. **Read path** — `get`, `describe`, `top`, `logs`, `scan`, `version`, each landing with its
-   CliRunner test suite per §8. This alone is already a useful, testable tool and the
-   highest-value/lowest-risk slice to ship first.
-3. **Write path** — `create`, `delete`, `send`, `exec`, `login`/`logout`, `advert`, `reboot`,
-   `set device`, `trace`, plus `-l` selectors wired into all of them — same test-first bar,
-   including the `--dry-run` no-op case on every mutating command.
-4. **Polish** — `completion`, full docs (§7), migration guide, package/publish as `meshcorectl`.
-5. **(Confirmed follow-up, later)** `meshcored` background agent per Decision 1.
+A `meshcored` background agent (see Design decisions, above): a small daemon owns the persistent
+connection and exposes it over a local socket, so `meshcorectl` becomes a thin, instant client.
+Not built yet.

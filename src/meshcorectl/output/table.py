@@ -1,10 +1,7 @@
 """A dependency-free, kubectl-style plain-text table writer.
 
-Real `kubectl get` output is column-aligned plain text with no color and no
-box-drawing (it's Go's `text/tabwriter` under the hood), and every column —
-including numeric-looking ones like RESTARTS or AGE — is left-justified, not
-right-aligned. This module matches that exactly: no ANSI color, alignment
-and spacing only (PLAN.md Decision 3).
+Column-aligned plain text, no color, no box-drawing -- every column,
+including numeric-looking ones, is left-justified rather than right-aligned.
 """
 
 from __future__ import annotations

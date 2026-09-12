@@ -1,8 +1,7 @@
 """Parses kubectl-`--since`-style relative duration strings ("30m", "2h", "1d").
 
-Shared by `logs --since` and `top --history --since` now; Phase 3's `-l`
-selector grammar (the `u<2d`/`u>1h` clauses ported from the original tool's
-`apply_to` filter) will reuse this same parser rather than duplicating it.
+Shared by `logs --since`, `top --history --since`, and the `-l` selector
+grammar's `u<2d`/`u>1h` clauses.
 """
 
 from __future__ import annotations

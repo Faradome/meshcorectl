@@ -48,11 +48,8 @@ def top_contact(
         end = int(time.time())
         start = end - int(duration)
 
-    # Contact resolution and the telemetry fetch itself are done inside one
-    # connection (found doubled up -- two separate "Serial Connection
-    # started" round trips for one command -- during live hardware testing)
-    # rather than as two separate state.call()s, matching how
-    # send/delete/exec/login already resolve + act in a single connection.
+    # Contact resolution and the telemetry fetch share one connection, like
+    # send/delete/exec/login.
     async def run(connection: MeshCoreConnection) -> list[dict[str, Any]]:
         contacts = await fetch_contacts(connection)
         contact = find_contact(contacts, name)

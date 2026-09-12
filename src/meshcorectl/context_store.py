@@ -1,14 +1,11 @@
 """Named connection contexts, kubeconfig-style.
 
-Replaces the original meshcore-cli's single cached-BLE-address file
-(`$HOME/.config/meshcore/<addr>`) with a small YAML store of named connection
-profiles at ``~/.config/meshcorectl/config.yaml`` (or ``$XDG_CONFIG_HOME``),
-plus a ``current-context`` pointer — the same shape as ``~/.kube/config``.
+A YAML store of named connection profiles at
+``~/.config/meshcorectl/config.yaml`` (or ``$XDG_CONFIG_HOME``), plus a
+``current-context`` pointer -- the same shape as ``~/.kube/config``.
 
-Every public method here is pure I/O + validation with no dependency on
-Click, asyncio, or the `meshcore` transport library, so it is fully unit
-testable by pointing a `ContextStore` at a temp path (see
-``tests/unit/test_context_store.py``).
+Every public method here is pure I/O and validation, with no dependency on
+Click, asyncio, or the `meshcore` transport library.
 """
 
 from __future__ import annotations
@@ -50,8 +47,8 @@ def default_config_path() -> Path:
 class ConnectionSpec:
     """How to reach a device: exactly one of ble/serial/tcp.
 
-    This is the boundary type ``connect.py`` consumes to open a live
-    connection (PLAN.md Decision 1) — it carries no live state itself.
+    The boundary type ``connect.py`` consumes to open a live connection --
+    it carries no live state itself.
     """
 
     kind: str

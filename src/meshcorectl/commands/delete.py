@@ -1,13 +1,11 @@
 """`meshcorectl delete` -- remove a contact (by name or -l selector), or
 clear a channel slot.
 
-Deliberately has no `pending-contacts` subcommand even though PLAN.md's
-original sketch listed one (mirroring the original tool's `flush_pending`):
-"pending" is purely client-side bookkeeping accumulated over a long-lived
-session (see `get.py`'s `pending-contacts`, which has to *watch* for a
-window instead of reading a cache, for the same reason). A one-shot
-connection never accumulates anything across invocations, so there is
-nothing here for a `delete pending-contacts` to ever clear.
+No `pending-contacts` subcommand: "pending" contacts are client-side
+bookkeeping accumulated over a session (see `get.py`'s `pending-contacts`,
+which watches for a window instead of reading a cache, for the same
+reason). A one-shot connection never accumulates anything across
+invocations, so there's nothing for `delete pending-contacts` to clear.
 """
 
 from __future__ import annotations
@@ -76,7 +74,7 @@ def delete_contact(state: Any, name: str | None, selector_text: str | None, dry_
 @click.pass_obj
 def delete_channel_command(state: Any, index_or_name: str, dry_run: bool) -> None:
     """Clear channel INDEX_OR_NAME (there's no true delete: the name and
-    secret are cleared, the original tool's own convention)."""
+    secret are cleared instead)."""
 
     async def run(connection: MeshCoreConnection) -> None:
         channels = await fetch_channels(connection)

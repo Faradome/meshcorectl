@@ -11,8 +11,8 @@ from meshcorectl.output import OutputFormat, render, resources
 @pytest.fixture
 def widget_kind():
     """Registers a synthetic resource kind for the duration of one test,
-    per output/resources.py's `temporary()` helper, so these tests don't
-    depend on any real resource (Phase 2+) being registered yet."""
+    via output/resources.py's `temporary()` helper, so these tests don't
+    depend on any real resource kind being registered."""
     spec = resources.ResourceSpec(
         columns=(("NAME", "name"), ("TYPE", "type")),
         wide_columns=(("HOPS", "hops"),),

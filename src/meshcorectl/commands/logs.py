@@ -107,14 +107,12 @@ def logs_command(
             show(raw)
 
         if follow:
-            # `CONTACT_MSG_RECV`/`CHANNEL_MSG_RECV` are not passively pushed
-            # events -- confirmed on real hardware that subscribing to them
-            # directly never fires, because they only arise as a side
-            # effect of an explicit `commands.get_msg()` call (normally
-            # triggered by a MESSAGES_WAITING push). So: subscribe to
-            # MESSAGES_WAITING and drain again -- via the same
-            # `drain_messages()` used for the initial batch -- whenever it
-            # fires, instead of waiting on events that never come.
+            # CONTACT_MSG_RECV/CHANNEL_MSG_RECV are not passively pushed:
+            # they only fire as a side effect of an explicit
+            # commands.get_msg() call, normally triggered by a
+            # MESSAGES_WAITING notification. So subscribe to
+            # MESSAGES_WAITING and drain again (via the same
+            # drain_messages() used for the initial batch) whenever it fires.
             fetch_task: asyncio.Task[None] | None = None
 
             async def drain_new_messages() -> None:

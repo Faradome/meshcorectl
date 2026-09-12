@@ -25,9 +25,7 @@ def test_top_contact_instant_reading(runner, configured_store, fake_connection):
     assert result.exit_code == 0, result.output
     assert "temperature" in result.output
     assert "21.5" in result.output
-    # Contact resolution + the telemetry fetch must share one connection --
-    # live hardware testing found this opening two ("Serial Connection
-    # started" logged twice for one invocation).
+    # Contact resolution + the telemetry fetch must share one connection.
     assert fake_connection.connect_call_count == 1
 
 

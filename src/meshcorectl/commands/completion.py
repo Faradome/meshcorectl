@@ -1,10 +1,8 @@
 """`meshcorectl completion` -- print a shell completion script.
 
-Click already does the hard part (matching commands/options/arguments as
-you type); this just exposes it the way `kubectl completion`/`gh
-completion` do, as a discoverable subcommand, instead of expecting users to
-know Click's own `_MESHCORECTL_COMPLETE=bash_source meshcorectl` env-var
-convention.
+Exposes Click's built-in completion support as a discoverable subcommand
+(like `kubectl completion`/`gh completion`) instead of requiring the
+`_MESHCORECTL_COMPLETE=bash_source` env-var convention.
 """
 
 from __future__ import annotations
