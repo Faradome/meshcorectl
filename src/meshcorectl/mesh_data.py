@@ -315,11 +315,34 @@ async def send_message(
 
 
 async def send_channel_message(
-    connection: MeshCoreConnection, channel: dict[str, Any], text: str
+    connection: MeshCoreConnection, channel: dict[str, Any], text: str, *, scope: str | None = None
 ) -> dict[str, Any]:
-    # Same as send_message() above: the channel text is debug-logged too.
+    """Send TEXT to `channel`, optionally scoping the flood to `scope`.
+
+    MeshCore channels don't carry a flood scope of their own: the wire
+    format for GET_CHANNEL/SET_CHANNEL (`meshcore.commands.device`) only
+    ever exchanges a name and a 16-byte secret, and `CHANNEL_INFO` mirrors
+    that back -- there's no scope field to read or write per channel.
+    Flood scope is instead a device-wide, non-persistent setting
+    (`commands.set_flood_scope`) that gates every flood-routed send --
+    channel messages included, since they're always flood-routed.
+
+    So `scope`, when given, is applied immediately before this one send and
+    reset back to the device's persisted default right after -- it can't be
+    stored on the channel, and leaving it in effect would silently scope
+    every other flood send (other channels, adverts, ...) until something
+    else reset it.
+    """
+    # Same as send_message() above: the channel text (and, here, the scope
+    # name the device logs while setting it) is debug-logged too.
     with redact_secrets():
-        result = await connection.commands.send_chan_msg(channel["index"], text)
+        if scope is not None:
+            _check(await connection.commands.set_flood_scope(scope), "setting flood scope")
+        try:
+            result = await connection.commands.send_chan_msg(channel["index"], text)
+        finally:
+            if scope is not None:
+                await connection.commands.reset_flood_scope()
     _check(result, "sending channel message")
     return {"sent": True}
 

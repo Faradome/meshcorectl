@@ -139,3 +139,48 @@ def test_send_channel_dry_run(runner, configured_store, fake_connection):
     assert result.exit_code == 0, result.output
     assert "would send" in result.output
     assert fake_connection.commands.call_count("send_chan_msg") == 0
+
+
+def test_send_channel_with_scope(runner, configured_store, fake_connection):
+    # Channels don't store a scope, so --scope has to go through the
+    # device-wide flood-scope commands around the send.
+    fake_connection.commands.script(
+        "get_channel",
+        Event(EventType.CHANNEL_INFO, {
+            "channel_idx": 0, "channel_name": "public", "channel_secret": b"\x00",
+        }),
+        Event(EventType.ERROR, {"reason": "none"}),
+    )
+    fake_connection.commands.script("set_flood_scope", Event(EventType.OK, {}))
+    fake_connection.commands.script("send_chan_msg", Event(EventType.MSG_SENT, {}))
+    fake_connection.commands.script("reset_flood_scope", Event(EventType.OK, {}))
+    result = invoke(
+        runner, configured_store, "send", "channel", "0", "hi", "--scope", "rescue"
+    )
+    assert result.exit_code == 0, result.output
+    assert "public" in result.output
+    assert fake_connection.commands.calls == [
+        ("get_channel", (0,), {}),
+        ("get_channel", (1,), {}),  # fetch_channels probes one past the last channel
+        ("set_flood_scope", ("rescue",), {}),
+        ("send_chan_msg", (0, "hi"), {}),
+        ("reset_flood_scope", (), {}),
+    ]
+
+
+def test_send_channel_dry_run_with_scope_shows_scope(runner, configured_store, fake_connection):
+    fake_connection.commands.script(
+        "get_channel",
+        Event(EventType.CHANNEL_INFO, {
+            "channel_idx": 0, "channel_name": "public", "channel_secret": b"\x00",
+        }),
+        Event(EventType.ERROR, {"reason": "none"}),
+    )
+    result = invoke(
+        runner, configured_store, "send", "channel", "0", "hi", "--scope", "rescue", "--dry-run"
+    )
+    assert result.exit_code == 0, result.output
+    assert "would send" in result.output
+    assert "rescue" in result.output
+    assert fake_connection.commands.call_count("set_flood_scope") == 0
+    assert fake_connection.commands.call_count("send_chan_msg") == 0

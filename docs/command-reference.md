@@ -622,8 +622,14 @@ Usage: meshcorectl send channel [OPTIONS] CHANNEL TEXT
   Send TEXT to CHANNEL (by index or name).
 
 Options:
-  --dry-run  Show what would be sent without sending it.
-  --help     Show this message and exit.
+  --scope SCOPE  Restrict this message's flood to SCOPE (a group name -- '#'
+                 is added automatically if missing) instead of the device's
+                 default; '*' forces it unscoped. Channels don't store a scope
+                 themselves, so this only takes effect for this one send: the
+                 device's flood scope is set right before sending and reset
+                 again right after.
+  --dry-run      Show what would be sent without sending it.
+  --help         Show this message and exit.
 ```
 
 ## `meshcorectl send message`

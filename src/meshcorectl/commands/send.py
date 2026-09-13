@@ -105,9 +105,24 @@ def send_message(
 @send_group.command("channel")
 @click.argument("index_or_name", metavar="CHANNEL")
 @click.argument("text")
+@click.option(
+    "--scope",
+    "scope",
+    default=None,
+    metavar="SCOPE",
+    help=(
+        "Restrict this message's flood to SCOPE (a group name -- '#' is "
+        "added automatically if missing) instead of the device's default; "
+        "'*' forces it unscoped. Channels don't store a scope themselves, "
+        "so this only takes effect for this one send: the device's flood "
+        "scope is set right before sending and reset again right after."
+    ),
+)
 @click.option("--dry-run", is_flag=True, help="Show what would be sent without sending it.")
 @click.pass_obj
-def send_channel(state: Any, index_or_name: str, text: str, dry_run: bool) -> None:
+def send_channel(
+    state: Any, index_or_name: str, text: str, scope: str | None, dry_run: bool
+) -> None:
     """Send TEXT to CHANNEL (by index or name)."""
 
     async def run(connection: MeshCoreConnection) -> None:
@@ -116,9 +131,10 @@ def send_channel(state: Any, index_or_name: str, text: str, dry_run: bool) -> No
         if channel is None:
             raise click.ClickException(f"no channel matching {index_or_name!r}")
         if dry_run:
-            click.echo(f"would send to channel {channel['name']!r}: {text!r} (dry run)")
+            scope_note = f" (scope={scope!r})" if scope is not None else ""
+            click.echo(f"would send to channel {channel['name']!r}: {text!r} (dry run){scope_note}")
             return
-        await send_channel_message_data(connection, channel, text)
+        await send_channel_message_data(connection, channel, text, scope=scope)
         click.echo(f"sent: {channel['name']!r}")
 
     state.call(run)

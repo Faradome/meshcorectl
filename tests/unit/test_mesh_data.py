@@ -608,6 +608,50 @@ async def test_send_channel_message_raises_on_error():
         await send_channel_message(fake, {"index": 0, "name": "public"}, "hi")
 
 
+async def test_send_channel_message_with_scope_sets_and_resets_flood_scope():
+    # Channels carry no scope of their own (CHANNEL_INFO has no such field),
+    # so a scope is a device-wide setting applied around this one send.
+    fake = FakeMeshCore()
+    fake.commands.script("set_flood_scope", Event(EventType.OK, {}))
+    fake.commands.script("send_chan_msg", Event(EventType.MSG_SENT, {}))
+    fake.commands.script("reset_flood_scope", Event(EventType.OK, {}))
+    channel = {"index": 2, "name": "#fdl"}
+    result = await send_channel_message(fake, channel, "hi", scope="rescue")
+    assert result == {"sent": True}
+    assert fake.commands.calls == [
+        ("set_flood_scope", ("rescue",), {}),
+        ("send_chan_msg", (2, "hi"), {}),
+        ("reset_flood_scope", (), {}),
+    ]
+
+
+async def test_send_channel_message_without_scope_does_not_touch_flood_scope():
+    fake = FakeMeshCore()
+    fake.commands.script("send_chan_msg", Event(EventType.MSG_SENT, {}))
+    channel = {"index": 2, "name": "#fdl"}
+    await send_channel_message(fake, channel, "hi")
+    assert fake.commands.call_count("set_flood_scope") == 0
+    assert fake.commands.call_count("reset_flood_scope") == 0
+
+
+async def test_send_channel_message_resets_flood_scope_even_on_send_error():
+    fake = FakeMeshCore()
+    fake.commands.script("set_flood_scope", Event(EventType.OK, {}))
+    fake.commands.script("send_chan_msg", Event(EventType.ERROR, {"reason": "nope"}))
+    fake.commands.script("reset_flood_scope", Event(EventType.OK, {}))
+    with pytest.raises(MeshDataError, match="nope"):
+        await send_channel_message(fake, {"index": 0, "name": "public"}, "hi", scope="rescue")
+    assert fake.commands.call_count("reset_flood_scope") == 1
+
+
+async def test_send_channel_message_raises_if_setting_scope_fails():
+    fake = FakeMeshCore()
+    fake.commands.script("set_flood_scope", Event(EventType.ERROR, {"reason": "bad scope"}))
+    with pytest.raises(MeshDataError, match="bad scope"):
+        await send_channel_message(fake, {"index": 0, "name": "public"}, "hi", scope="rescue")
+    assert fake.commands.call_count("send_chan_msg") == 0
+
+
 async def test_send_message_redacts_meshcore_logger_during_the_send(meshcore_logger_at_debug):
     # M1 fix: the `meshcore` library debug-logs message text -- confirm
     # `-vv` (a DEBUG-level "meshcore" logger) doesn't see it.
